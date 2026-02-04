@@ -2,17 +2,6 @@ const pool = require("./mysql")
 
 let tablesReady = false
 
-const parseJsonValue = value => {
-  if (value === null || value === undefined) return null
-  if (typeof value !== "string") return value
-  try {
-    return JSON.parse(value)
-  } catch (err) {
-    console.error("[applications] Failed to parse JSON value", err)
-    return null
-  }
-}
-
 const ensureTables = async () => {
   if (tablesReady) return
 
