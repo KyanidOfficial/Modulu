@@ -9,6 +9,29 @@ const pool = mysql.createPool({
   connectionLimit: 5
 })
 
+let moderationLogsReady = false
+
+const ensureModerationLogsTable = async () => {
+  if (moderationLogsReady) return
+
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS moderation_logs (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      guild_id VARCHAR(32) NOT NULL,
+      action VARCHAR(32) NOT NULL,
+      user_id VARCHAR(32) NULL,
+      moderator_id VARCHAR(32) NULL,
+      reason TEXT NULL,
+      metadata JSON NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+    `
+  )
+
+  moderationLogsReady = true
+}
+
 module.exports = {
   async get(guildId) {
     const [rows] = await pool.query(
@@ -153,5 +176,25 @@ module.exports = {
       `,
       [minutes]
     )
+  },
+
+  async addModerationLog({ guildId, action, userId, moderatorId, reason, metadata }) {
+    await ensureModerationLogsTable()
+    const [result] = await pool.query(
+      `
+      INSERT INTO moderation_logs
+        (guild_id, action, user_id, moderator_id, reason, metadata)
+      VALUES (?, ?, ?, ?, ?, ?)
+      `,
+      [
+        guildId,
+        action,
+        userId || null,
+        moderatorId || null,
+        reason || null,
+        metadata ? JSON.stringify(metadata) : null
+      ]
+    )
+    return result.insertId
   }
 }

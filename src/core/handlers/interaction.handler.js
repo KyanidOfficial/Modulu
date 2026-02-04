@@ -231,7 +231,12 @@ module.exports = async (client, interaction) => {
     if (!command || typeof command.execute !== "function") return
 
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply()
+      try {
+        await interaction.deferReply()
+      } catch (err) {
+        if (err.code === 10062) return
+        throw err
+      }
     }
 
     await command.execute(interaction)
@@ -241,6 +246,7 @@ module.exports = async (client, interaction) => {
     console.error(err)
 
     try {
+      if (!interaction.isRepliable()) return
       if (interaction.replied || interaction.deferred) {
         await interaction.editReply({
           embeds: [
@@ -251,6 +257,18 @@ module.exports = async (client, interaction) => {
               reason: "Internal error"
             })
           ]
+        })
+      } else {
+        await interaction.reply({
+          embeds: [
+            errorEmbed({
+              users: interaction.user ? `<@${interaction.user.id}>` : "Unknown",
+              punishment: "command",
+              state: "failed",
+              reason: "Internal error"
+            })
+          ],
+          ephemeral: true
         })
       }
     } catch {}
