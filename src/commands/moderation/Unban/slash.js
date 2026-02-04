@@ -4,8 +4,7 @@ const errorEmbed = require("../../../messages/embeds/error.embed")
 const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
-const logAction = require("../../../utils/logAction")
-const logEmbed = require("../../../messages/embeds/log.embed")
+const logModerationAction = require("../../../utils/logModerationAction")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -66,16 +65,14 @@ module.exports = {
       return replyError("Unban failed")
     }
 
-    await logAction(
+    await logModerationAction({
       guild,
-      logEmbed({
-        punishment: "unban",
-        user: `<@${userId}>`,
-        moderator: `<@${interaction.user.id}>`,
-        reason,
-        color: COLORS.success
-      })
-    )
+      action: "unban",
+      userId,
+      moderatorId: interaction.user.id,
+      reason,
+      color: COLORS.success
+    })
 
     if (ban?.user) {
       await dmUser(

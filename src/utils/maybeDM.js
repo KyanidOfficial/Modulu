@@ -12,14 +12,16 @@ module.exports = async (guildId, user, embed) => {
   }
 
   let data
+  let enabled = true
   try {
     data = await db.get(guildId)
   } catch (err) {
     console.error("[DM DEBUG] db.get failed", err)
-    return
   }
 
-  const enabled = !!data?.setup?.features?.dmOnPunish
+  if (data?.setup?.features?.dmOnPunish !== undefined) {
+    enabled = !!data.setup.features.dmOnPunish
+  }
 
   console.log("[DM DEBUG]", {
     guildId,

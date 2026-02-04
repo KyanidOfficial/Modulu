@@ -6,36 +6,23 @@ const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
 
-const PRESET_REASONS = [
-  "Cheating",
-  "Exploiting",
-  "Harassment",
-  "Hate speech",
-  "Spam",
-  "Advertising",
-  "Ban evasion",
-  "Staff discretion"
-]
-
 module.exports = {
   data: new SlashCommandBuilder()
-    .setName("ban")
-    .setDescription("Ban a user with advanced options")
+    .setName("softban")
+    .setDescription("Softban a user (ban and unban to delete messages)")
     .addUserOption(o =>
       o.setName("user")
-        .setDescription("User to ban")
+        .setDescription("User to softban")
         .setRequired(true)
     )
     .addStringOption(o =>
       o.setName("reason")
-        .setDescription("Reason for the ban")
-        .setAutocomplete(true)
+        .setDescription("Reason for the softban")
     )
     .addIntegerOption(o =>
       o.setName("delete_messages")
         .setDescription("Delete recent messages")
         .addChoices(
-          { name: "Do not delete", value: 0 },
           { name: "Last 1 day", value: 1 },
           { name: "Last 3 days", value: 3 },
           { name: "Last 7 days", value: 7 }
@@ -46,41 +33,23 @@ module.exports = {
         .setDescription("Send DM to the user. Default true")
     ),
 
-  async autocomplete(interaction) {
-    const focused = interaction.options.getFocused().toLowerCase()
-    const choices = PRESET_REASONS
-      .filter(r => r.toLowerCase().includes(focused))
-      .slice(0, 25)
-
-    await interaction.respond(
-      choices.map(r => ({ name: r, value: r }))
-    )
-  },
-
   async execute(interaction) {
     const guild = interaction.guild
     if (!guild) return
 
     const executor = interaction.member
     const botMember = guild.members.me
-
     const targetUser = interaction.options.getUser("user")
-    const reason =
-      interaction.options.getString("reason") ||
-      "No reason provided"
-
-    const deleteDays =
-      interaction.options.getInteger("delete_messages") ?? 0
-
-    const sendDM =
-      interaction.options.getBoolean("dm") !== false
+    const reason = interaction.options.getString("reason") || "No reason provided"
+    const deleteDays = interaction.options.getInteger("delete_messages") ?? 1
+    const sendDM = interaction.options.getBoolean("dm") !== false
 
     const replyError = text =>
       interaction.editReply({
         embeds: [
           errorEmbed({
             users: `<@${targetUser.id}>`,
-            punishment: "ban",
+            punishment: "softban",
             state: "failed",
             reason: text,
             color: COLORS.error
@@ -97,11 +66,11 @@ module.exports = {
     }
 
     if (targetUser.id === interaction.user.id) {
-      return replyError("You cannot ban yourself")
+      return replyError("You cannot softban yourself")
     }
 
     if (targetUser.id === guild.ownerId) {
-      return replyError("You cannot ban the server owner")
+      return replyError("You cannot softban the server owner")
     }
 
     const targetMember =
@@ -117,31 +86,12 @@ module.exports = {
       }
     }
 
-    try {
-      await guild.members.ban(targetUser.id, {
-        reason,
-        deleteMessageDays: deleteDays
-      })
-    } catch {
-      return replyError("Ban failed")
-    }
-
-    await logModerationAction({
-      guild,
-      action: "ban",
-      userId: targetUser.id,
-      moderatorId: interaction.user.id,
-      reason,
-      color: COLORS.error,
-      metadata: { deleteDays }
-    })
-
     if (sendDM) {
       await dmUser(
         guild.id,
         targetUser,
         dmEmbed({
-          punishment: "ban",
+          punishment: "softban",
           reason,
           guild: guild.name,
           color: COLORS.warning
@@ -149,11 +99,31 @@ module.exports = {
       )
     }
 
+    try {
+      await guild.members.ban(targetUser.id, {
+        reason,
+        deleteMessageDays: deleteDays
+      })
+      await guild.members.unban(targetUser.id, "Softban completed")
+    } catch {
+      return replyError("Softban failed")
+    }
+
+    await logModerationAction({
+      guild,
+      action: "softban",
+      userId: targetUser.id,
+      moderatorId: interaction.user.id,
+      reason,
+      color: COLORS.error,
+      metadata: { deleteDays }
+    })
+
     return interaction.editReply({
       embeds: [
         embed({
           users: `<@${targetUser.id}>`,
-          punishment: "ban",
+          punishment: "softban",
           state: "applied",
           reason,
           color: COLORS.success
