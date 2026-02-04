@@ -56,6 +56,7 @@ const getConfig = async (guildId, type) => {
     ? parseJsonValue
     : value => (typeof value === "string" ? JSON.parse(value) : value)
   return parse(rows[0].config_json)
+  return parseJsonValue(rows[0].config_json)
 }
 
 const listConfigs = async guildId => {
@@ -70,6 +71,9 @@ const listConfigs = async guildId => {
   return rows.map(row => ({
     type: row.type,
     config: parse(row.config_json)
+  return rows.map(row => ({
+    type: row.type,
+    config: parseJsonValue(row.config_json)
   }))
 }
 
