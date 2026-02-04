@@ -2,6 +2,17 @@ const pool = require("./mysql")
 
 let tablesReady = false
 
+const parseJsonValue = value => {
+  if (value === null || value === undefined) return null
+  if (typeof value !== "string") return value
+  try {
+    return JSON.parse(value)
+  } catch (err) {
+    console.error("[applications] Failed to parse JSON value", err)
+    return null
+  }
+}
+
 const ensureTables = async () => {
   if (tablesReady) return
 
@@ -41,6 +52,10 @@ const getConfig = async (guildId, type) => {
     [guildId, type]
   )
   if (!rows.length) return null
+  const parse = typeof parseJsonValue === "function"
+    ? parseJsonValue
+    : value => (typeof value === "string" ? JSON.parse(value) : value)
+  return parse(rows[0].config_json)
   return parseJsonValue(rows[0].config_json)
 }
 
@@ -50,6 +65,12 @@ const listConfigs = async guildId => {
     "SELECT type, config_json FROM application_configs WHERE guild_id = ?",
     [guildId]
   )
+  const parse = typeof parseJsonValue === "function"
+    ? parseJsonValue
+    : value => (typeof value === "string" ? JSON.parse(value) : value)
+  return rows.map(row => ({
+    type: row.type,
+    config: parse(row.config_json)
   return rows.map(row => ({
     type: row.type,
     config: parseJsonValue(row.config_json)
