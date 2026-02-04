@@ -5,8 +5,7 @@ const errorEmbed = require("../../../messages/embeds/error.embed")
 const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
-const logAction = require("../../../utils/logAction")
-const logEmbed = require("../../../messages/embeds/log.embed")
+const logModerationAction = require("../../../utils/logModerationAction")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -113,18 +112,16 @@ module.exports = {
 
     const expiresAt = Math.floor((Date.now() + parsed.ms) / 1000)
 
-    await logAction(
+    await logModerationAction({
       guild,
-      logEmbed({
-        punishment: "timeout",
-        user: `<@${member.id}>`,
-        moderator: `<@${interaction.user.id}>`,
-        reason,
-        duration: parsed.label,
-        expiresAt,
-        color: COLORS.warning
-      })
-    )
+      action: "timeout",
+      userId: member.id,
+      moderatorId: interaction.user.id,
+      reason,
+      duration: parsed.label,
+      expiresAt,
+      color: COLORS.warning
+    })
 
     await dmUser(
       guild.id,

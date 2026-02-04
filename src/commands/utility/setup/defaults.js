@@ -2,7 +2,7 @@ const createDraft = (saved, gateRow) => {
   const draft = saved
     ? JSON.parse(JSON.stringify(saved))
     : {
-        roles: { moderators: [], administrators: [] },
+        roles: { moderators: [], administrators: [], muted: null, quarantined: null },
         channels: { logs: null, serverLogs: null, chatLogs: null, appeals: null, suspicious: null },
         features: { dmOnPunish: true, serverLogs: true, chatLogs: false }
       }
