@@ -1,0 +1,7 @@
+require("dotenv").config()
+require("./core/workers/violationCleanup")()
+require("./core/workers/spamCleanup")()
+const client = require("./client")
+require("./bootstrap")(client)
+require("./core/loops/staffTime.loop")(client)
+client.login(process.env.TOKEN)
