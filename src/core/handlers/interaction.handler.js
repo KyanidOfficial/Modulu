@@ -17,6 +17,9 @@ const GLOBAL_FEEDBACK_CHANNEL = "1456085711802335353"
 const FEEDBACK_COOLDOWN = 1000 * 60 * 60
 const feedbackCooldowns = new Map()
 
+const isIgnorableInteractionError = err =>
+  err && (err.code === 10062 || err.code === 10008)
+
 module.exports = async (client, interaction) => {
   try {
     if (!interaction) return
@@ -234,7 +237,7 @@ module.exports = async (client, interaction) => {
       try {
         await interaction.deferReply()
       } catch (err) {
-        if (err.code === 10062) return
+        if (isIgnorableInteractionError(err)) return
         throw err
       }
     }
@@ -248,28 +251,36 @@ module.exports = async (client, interaction) => {
     try {
       if (!interaction.isRepliable()) return
       if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({
-          embeds: [
-            errorEmbed({
-              users: interaction.user ? `<@${interaction.user.id}>` : "Unknown",
-              punishment: "command",
-              state: "failed",
-              reason: "Internal error"
-            })
-          ]
-        })
+        try {
+          await interaction.editReply({
+            embeds: [
+              errorEmbed({
+                users: interaction.user ? `<@${interaction.user.id}>` : "Unknown",
+                punishment: "command",
+                state: "failed",
+                reason: "Internal error"
+              })
+            ]
+          })
+        } catch (err) {
+          if (!isIgnorableInteractionError(err)) throw err
+        }
       } else {
-        await interaction.reply({
-          embeds: [
-            errorEmbed({
-              users: interaction.user ? `<@${interaction.user.id}>` : "Unknown",
-              punishment: "command",
-              state: "failed",
-              reason: "Internal error"
-            })
-          ],
-          ephemeral: true
-        })
+        try {
+          await interaction.reply({
+            embeds: [
+              errorEmbed({
+                users: interaction.user ? `<@${interaction.user.id}>` : "Unknown",
+                punishment: "command",
+                state: "failed",
+                reason: "Internal error"
+              })
+            ],
+            ephemeral: true
+          })
+        } catch (err) {
+          if (!isIgnorableInteractionError(err)) throw err
+        }
       }
     } catch {}
   }
