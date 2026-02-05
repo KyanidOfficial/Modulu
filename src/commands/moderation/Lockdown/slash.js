@@ -60,6 +60,7 @@ module.exports = {
       requiredDiscordPerms: [PermissionsBitField.Flags.ManageChannels]
     })
     if (!access.allowed) {
+    if (!executor.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
       return interaction.editReply({
         embeds: [
           errorEmbed({
@@ -67,6 +68,7 @@ module.exports = {
             punishment: "lockdown",
             state: "failed",
             reason: access.reason,
+            reason: "Missing permissions",
             color: COLORS.error
           })
         ]

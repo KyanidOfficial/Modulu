@@ -52,6 +52,10 @@ const getConfig = async (guildId, type) => {
     [guildId, type]
   )
   if (!rows.length) return null
+  const parse = typeof parseJsonValue === "function"
+    ? parseJsonValue
+    : value => (typeof value === "string" ? JSON.parse(value) : value)
+  return parse(rows[0].config_json)
   return parseJsonValue(rows[0].config_json)
 }
 
@@ -61,6 +65,12 @@ const listConfigs = async guildId => {
     "SELECT type, config_json FROM application_configs WHERE guild_id = ?",
     [guildId]
   )
+  const parse = typeof parseJsonValue === "function"
+    ? parseJsonValue
+    : value => (typeof value === "string" ? JSON.parse(value) : value)
+  return rows.map(row => ({
+    type: row.type,
+    config: parse(row.config_json)
   return rows.map(row => ({
     type: row.type,
     config: parseJsonValue(row.config_json)

@@ -10,6 +10,8 @@ const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
   COMMAND_ENABLED,
+
+module.exports = {
   data: new SlashCommandBuilder()
     .setName("softban")
     .setDescription("Softban a user (ban and unban to delete messages)")
@@ -67,6 +69,8 @@ module.exports = {
     })
     if (!access.allowed) {
       return replyError(access.reason)
+    if (!executor.permissions.has(PermissionsBitField.Flags.BanMembers)) {
+      return replyError("Missing permissions")
     }
 
     if (!botMember.permissions.has(PermissionsBitField.Flags.BanMembers)) {

@@ -8,6 +8,8 @@ const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
   COMMAND_ENABLED,
+
+module.exports = {
   data: new SlashCommandBuilder()
     .setName("purge")
     .setDescription("Mass delete messages from a channel")
@@ -52,6 +54,7 @@ module.exports = {
       requiredDiscordPerms: [PermissionsBitField.Flags.ManageMessages]
     })
     if (!access.allowed) {
+    if (!executor.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
       return interaction.editReply({
         embeds: [
           errorEmbed({
@@ -59,6 +62,7 @@ module.exports = {
             punishment: "purge",
             state: "failed",
             reason: access.reason,
+            reason: "Missing permissions",
             color: COLORS.error
           })
         ]
