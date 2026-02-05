@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField, ChannelType } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
@@ -7,6 +8,7 @@ const { scheduleDeletion } = require("../../../utils/tempVoice")
 const logModerationAction = require("../../../utils/logModerationAction")
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("voice-temp")
     .setDescription("Create a temporary voice channel")

@@ -2,6 +2,7 @@ require("dotenv").config()
 const fs = require("fs")
 const path = require("path")
 const { REST, Routes } = require("discord.js")
+const { isCommandEnabled } = require("../utils/commandToggle")
 
 if (!process.env.TOKEN) throw new Error("Missing TOKEN")
 if (!process.env.CLIENT_ID) throw new Error("Missing CLIENT_ID")
@@ -28,6 +29,12 @@ const loadCommands = () => {
       if (!file.data || !file.data.name) {
         throw new Error(`Missing data for ${slashPath}`)
       }
+      if (names.has(file.data.name)) {
+        throw new Error(`Duplicate slash name ${file.data.name}`)
+      }
+
+      if (!isCommandEnabled(file)) {
+        console.log("Skipped disabled command", file.data.name)
       if (names.has(file.data.name)) {
         throw new Error(`Duplicate slash name ${file.data.name}`)
         errors.push(`Missing data for ${slashPath}`)

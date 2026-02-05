@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const db = require("../../../core/database")
 const systemEmbed = require("../../../messages/embeds/system.embed")
@@ -14,6 +15,7 @@ const ensureConfig = async guildId => {
 }
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("roblox")
     .setDescription("Roblox group ranking integration")

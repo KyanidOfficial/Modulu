@@ -1,8 +1,13 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField, ChannelType } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
+
+module.exports = {
+  COMMAND_ENABLED,
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -43,6 +48,12 @@ module.exports = {
       })
     }
 
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.ManageMessages]
+    })
+    if (!access.allowed) {
     if (!executor.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
       return interaction.editReply({
         embeds: [
@@ -50,6 +61,7 @@ module.exports = {
             users: `<@${interaction.user.id}>`,
             punishment: "purge",
             state: "failed",
+            reason: access.reason,
             reason: "Missing permissions",
             color: COLORS.error
           })
@@ -65,6 +77,34 @@ module.exports = {
             punishment: "purge",
             state: "failed",
             reason: "Bot lacks permissions",
+            color: COLORS.error
+          })
+        ]
+      })
+    }
+
+    if (!Number.isInteger(amount)) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${interaction.user.id}>`,
+            punishment: "purge",
+            state: "failed",
+            reason: "Amount must be a whole number",
+            color: COLORS.error
+          })
+        ]
+      })
+    }
+
+    if (amount < 1 || amount > 100) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${interaction.user.id}>`,
+            punishment: "purge",
+            state: "failed",
+            reason: "Amount must be between 1 and 100",
             color: COLORS.error
           })
         ]

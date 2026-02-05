@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
@@ -5,6 +6,10 @@ const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
+
+module.exports = {
+  COMMAND_ENABLED,
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -43,6 +48,13 @@ module.exports = {
         ]
       })
 
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.KickMembers]
+    })
+    if (!access.allowed) {
+      return replyError(access.reason)
     if (!executor.permissions.has(PermissionsBitField.Flags.KickMembers)) {
       return replyError("Missing permissions")
     }
@@ -55,6 +67,10 @@ module.exports = {
 
     if (target.id === interaction.user.id) {
       return replyError("You cannot kick yourself")
+    }
+
+    if (target.id === botMember.id) {
+      return replyError("You cannot kick the bot")
     }
 
     if (target.id === guild.ownerId) {

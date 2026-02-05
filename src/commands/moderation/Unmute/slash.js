@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
@@ -6,6 +7,10 @@ const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
 const ensureRole = require("../../../utils/ensureRole")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
+
+module.exports = {
+  COMMAND_ENABLED,
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -35,6 +40,13 @@ module.exports = {
         ]
       })
 
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
+    })
+    if (!access.allowed) {
+      return replyError(access.reason)
     if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
       return replyError("Missing permissions")
     }
@@ -52,6 +64,10 @@ module.exports = {
     })
 
     if (!mutedRole) return replyError("Muted role not found")
+
+    if (!target.roles.cache.has(mutedRole.id)) {
+      return replyError("User is not muted")
+    }
 
     try {
       await target.roles.remove(mutedRole, "Manual unmute")

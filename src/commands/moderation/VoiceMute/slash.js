@@ -1,8 +1,13 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
+
+module.exports = {
+  COMMAND_ENABLED,
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -47,6 +52,13 @@ module.exports = {
         ]
       })
 
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.MuteMembers]
+    })
+    if (!access.allowed) {
+      return replyError(access.reason)
     if (!executor.permissions.has(PermissionsBitField.Flags.MuteMembers)) {
       return replyError("Missing permissions")
     }

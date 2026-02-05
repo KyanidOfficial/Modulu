@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
@@ -6,6 +7,10 @@ const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
 const ensureRole = require("../../../utils/ensureRole")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
+
+module.exports = {
+  COMMAND_ENABLED,
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -43,6 +48,13 @@ module.exports = {
         ]
       })
 
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
+    })
+    if (!access.allowed) {
+      return replyError(access.reason)
     if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
       return replyError("Missing permissions")
     }
@@ -52,6 +64,14 @@ module.exports = {
     }
 
     if (!target) return replyError("Member not found")
+
+    if (target.id === interaction.user.id) {
+      return replyError("You cannot mute yourself")
+    }
+
+    if (target.id === guild.members.me.id) {
+      return replyError("You cannot mute the bot")
+    }
 
     if (target.roles.highest.position >= executor.roles.highest.position) {
       return replyError("Role hierarchy issue")
@@ -75,6 +95,10 @@ module.exports = {
     })
 
     if (!mutedRole) return replyError("Unable to set up muted role")
+
+    if (target.roles.cache.has(mutedRole.id)) {
+      return replyError("User is already muted")
+    }
 
     try {
       await target.roles.add(mutedRole, reason)

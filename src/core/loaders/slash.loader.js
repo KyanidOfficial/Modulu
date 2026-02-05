@@ -1,6 +1,7 @@
 const fs = require("fs")
 const path = require("path")
 const registry = require("../registry/slash.commands")
+const { isCommandEnabled } = require("../../utils/commandToggle")
 
 module.exports = client => {
   console.log("Slash loader started")
@@ -30,6 +31,11 @@ module.exports = client => {
 
         if (typeof command.execute !== "function") {
           console.error("Missing execute()", command.data.name)
+          continue
+        }
+
+        if (!isCommandEnabled(command)) {
+          console.log("Skipped disabled command", command.data.name)
           continue
         }
 

@@ -1,8 +1,10 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField, ChannelType } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 const applyLockdown = async (channels, enabled) => {
   const permissions = { SendMessages: !enabled, AddReactions: !enabled, SendMessagesInThreads: !enabled }
@@ -20,6 +22,7 @@ const applyLockdown = async (channels, enabled) => {
 }
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("lockdown")
     .setDescription("Lock or unlock text channels")
@@ -51,6 +54,12 @@ module.exports = {
     const mode = interaction.options.getString("mode")
     const targetChannel = interaction.options.getChannel("channel")
 
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.ManageChannels]
+    })
+    if (!access.allowed) {
     if (!executor.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
       return interaction.editReply({
         embeds: [
@@ -58,6 +67,7 @@ module.exports = {
             users: `<@${interaction.user.id}>`,
             punishment: "lockdown",
             state: "failed",
+            reason: access.reason,
             reason: "Missing permissions",
             color: COLORS.error
           })

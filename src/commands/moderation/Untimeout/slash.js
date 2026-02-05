@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
@@ -5,8 +6,10 @@ const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("untimeout")
     .setDescription("Remove a timeout")
@@ -37,14 +40,19 @@ module.exports = {
       })
     }
 
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
+    })
+    if (!access.allowed) {
       return interaction.editReply({
         embeds: [
           errorEmbed({
             users: `<@${interaction.user.id}>`,
             punishment: "untimeout",
             state: "failed",
-            reason: "Missing permissions",
+            reason: access.reason,
             color: COLORS.error
           })
         ]

@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
@@ -5,6 +6,7 @@ const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 const PRESET_REASONS = [
   "Cheating",
@@ -18,6 +20,7 @@ const PRESET_REASONS = [
 ]
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("ban")
     .setDescription("Ban a user with advanced options")
@@ -88,8 +91,13 @@ module.exports = {
         ]
       })
 
-    if (!executor.permissions.has(PermissionsBitField.Flags.BanMembers)) {
-      return replyError("Missing permissions")
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.BanMembers]
+    })
+    if (!access.allowed) {
+      return replyError(access.reason)
     }
 
     if (!botMember.permissions.has(PermissionsBitField.Flags.BanMembers)) {
@@ -100,12 +108,15 @@ module.exports = {
       return replyError("You cannot ban yourself")
     }
 
+    if (targetUser.id === botMember.id) {
+      return replyError("You cannot ban the bot")
+    }
+
     if (targetUser.id === guild.ownerId) {
       return replyError("You cannot ban the server owner")
     }
 
-    const targetMember =
-      await guild.members.fetch(targetUser.id).catch(() => null)
+    const targetMember = await guild.members.fetch(targetUser.id).catch(() => null)
 
     if (targetMember) {
       if (targetMember.roles.highest.position >= executor.roles.highest.position) {
@@ -115,6 +126,11 @@ module.exports = {
       if (targetMember.roles.highest.position >= botMember.roles.highest.position) {
         return replyError("Target role is higher than bot role")
       }
+    }
+
+    const alreadyBanned = await guild.bans.fetch(targetUser.id).catch(() => null)
+    if (alreadyBanned) {
+      return replyError("User is already banned")
     }
 
     try {

@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder } = require("discord.js")
 const staffPerms = require("../../../utils/staffPerms")
 const staffDb = require("../../../core/database/staffTime")
@@ -9,6 +10,7 @@ const errorEmbed = require("../../../messages/embeds/error.embed")
 const COLORS = require("../../../utils/colors")
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("clockout")
     .setDescription("Clock out from staff duty"),

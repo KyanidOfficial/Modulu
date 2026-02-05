@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
@@ -5,6 +6,10 @@ const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
+
+module.exports = {
+  COMMAND_ENABLED,
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -57,6 +62,13 @@ module.exports = {
         ]
       })
 
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.BanMembers]
+    })
+    if (!access.allowed) {
+      return replyError(access.reason)
     if (!executor.permissions.has(PermissionsBitField.Flags.BanMembers)) {
       return replyError("Missing permissions")
     }
@@ -67,6 +79,10 @@ module.exports = {
 
     if (targetUser.id === interaction.user.id) {
       return replyError("You cannot softban yourself")
+    }
+
+    if (targetUser.id === botMember.id) {
+      return replyError("You cannot softban the bot")
     }
 
     if (targetUser.id === guild.ownerId) {
@@ -84,6 +100,11 @@ module.exports = {
       if (targetMember.roles.highest.position >= botMember.roles.highest.position) {
         return replyError("Target role is higher than bot role")
       }
+    }
+
+    const alreadyBanned = await guild.bans.fetch(targetUser.id).catch(() => null)
+    if (alreadyBanned) {
+      return replyError("User is already banned")
     }
 
     if (sendDM) {

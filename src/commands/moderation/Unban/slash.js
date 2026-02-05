@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
@@ -5,8 +6,10 @@ const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("unban")
     .setDescription("Unban a user by ID")
@@ -44,8 +47,13 @@ module.exports = {
       return replyError("Invalid user ID")
     }
 
-    if (!executor.permissions.has(PermissionsBitField.Flags.BanMembers)) {
-      return replyError("Missing permissions")
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.BanMembers]
+    })
+    if (!access.allowed) {
+      return replyError(access.reason)
     }
 
     if (!botMember.permissions.has(PermissionsBitField.Flags.BanMembers)) {
