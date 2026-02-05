@@ -1,15 +1,12 @@
 const { EmbedBuilder } = require("discord.js")
 const COLORS = require("../../utils/colors")
-const { EMOJIS } = require("../../utils/constants")
-
-module.exports = data => 
+module.exports = data =>
   new EmbedBuilder()
-    .setTitle(`Uh oh. This is embarrassing.`)
+    .setTitle("Action failed")
     .setColor(data.color || COLORS.error)
     .setDescription(
-      `${data.users} ${data.punisment} **failed**\n` +
-      `> **Reason:** ${data.reason || "Err"}\n` +
-      `> **State:** ${data.state || "Err"}` +
-      `\n` +
+      `${data.users} ${data.punishment || "action"} **failed**\n` +
+      `> **Reason:** ${data.reason || "Unknown error"}\n` +
+      `> **State:** ${data.state || "failed"}\n` +
       `Please contact developers if the issue persists.`
     )
