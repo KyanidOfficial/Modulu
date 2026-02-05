@@ -1,7 +1,33 @@
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
+
 module.exports = {
-  category: "Moderation",
-  description: "View warnings",
-  usage: "warns <user>",
-  example: "warns @user",
-  permissions: ["ModerateMembers"]
+  name: 'warns-meta',
+  description: 'warns-meta command',
+  data: { name: 'warns-meta', description: 'warns-meta command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getUser ? interaction.options.getUser('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
+
+    const guard = await guardCommand({
+      commandName: 'warns',
+      interaction,
+      requiredDiscordPerms: ['ModerateMembers'],
+      requireGuild: true,
+      requireTarget: true,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
+  }
 }

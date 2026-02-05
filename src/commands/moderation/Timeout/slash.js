@@ -1,155 +1,33 @@
-const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
-const parse = require("../../../utils/time")
-const embed = require("../../../messages/embeds/punishment.embed")
-const errorEmbed = require("../../../messages/embeds/error.embed")
-const dmUser = require("../../../utils/maybeDM")
-const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
-const COLORS = require("../../../utils/colors")
-const logAction = require("../../../utils/logAction")
-const logEmbed = require("../../../messages/embeds/log.embed")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("timeout")
-    .setDescription("Timeout a user")
-    .addUserOption(o =>
-      o.setName("user").setDescription("Target user").setRequired(true)
-    )
-    .addStringOption(o =>
-      o.setName("time").setDescription("Duration").setRequired(true)
-    )
-    .addStringOption(o =>
-      o.setName("reason").setDescription("Reason")
-    ),
+  name: 'timeout',
+  description: 'timeout command',
+  data: { name: 'timeout', description: 'timeout command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = interaction && interaction.options && interaction.options.getInteger ? interaction.options.getInteger('duration_ms') : null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-  async execute(interaction) {
-    const guild = interaction.guild
-    if (!guild) {
-      throw new Error("No guild context")
-    }
-
-    const member = interaction.options.getMember("user")
-    const reason = interaction.options.getString("reason") || "No reason provided"
-    const timeInput = interaction.options.getString("time")
-
-    if (!member) {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: "Unknown user",
-            punishment: "timeout",
-            state: "failed",
-            reason: "Member not found",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
-    const parsed = parse(timeInput)
-    if (!parsed || !parsed.ms) {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: `<@${member.id}>`,
-            punishment: "timeout",
-            state: "failed",
-            reason: "Invalid time format",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
-    const executor = interaction.member
-
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: `<@${interaction.user.id}>`,
-            punishment: "timeout",
-            state: "failed",
-            reason: "Missing permissions",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
-    if (!guild.members.me.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: `<@${member.id}>`,
-            punishment: "timeout",
-            state: "failed",
-            reason: "Bot lacks permissions",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
-    if (member.roles.highest.position >= executor.roles.highest.position) {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: `<@${member.id}>`,
-            punishment: "timeout",
-            state: "failed",
-            reason: "Role hierarchy issue",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
-    try {
-      await member.timeout(parsed.ms, reason)
-    } catch (err) {
-      throw err
-    }
-
-    const expiresAt = Math.floor((Date.now() + parsed.ms) / 1000)
-
-    await logAction(
-      guild,
-      logEmbed({
-        punishment: "timeout",
-        user: `<@${member.id}>`,
-        moderator: `<@${interaction.user.id}>`,
-        reason,
-        duration: parsed.label,
-        expiresAt,
-        color: COLORS.warning
-      })
-    )
-
-    await dmUser(
-      guild.id,
-      member.user,
-      dmEmbed({
-        punishment: "timeout",
-        expiresAt,
-        reason,
-        guild: guild.name,
-        color: COLORS.warning
-      })
-    )
-
-    return interaction.editReply({
-      embeds: [
-        embed({
-          users: `<@${member.id}>`,
-          punishment: "timeout",
-          state: "applied",
-          reason,
-          duration: parsed.label,
-          expiresAt,
-          color: COLORS.success
-        })
-      ]
+    const guard = await guardCommand({
+      commandName: 'timeout',
+      interaction,
+      requiredDiscordPerms: ['ModerateMembers'],
+      requireGuild: true,
+      requireTarget: true,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }

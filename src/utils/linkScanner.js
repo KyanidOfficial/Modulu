@@ -1,6 +1,3 @@
-module.exports.extract = content => {
-  if (!content) return []
+'use strict'
 
-  const regex = /((https?:\/\/)?([a-z0-9-]+\.)+[a-z]{2,}(\/[^\s]*)?)/gi
-  return content.match(regex) || []
-}
+module.exports = {}

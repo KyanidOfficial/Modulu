@@ -1,27 +1,33 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
+'use strict'
 
-const buildMainRow = () =>
-  new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("setup_roles").setLabel("Roles").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId("setup_channels").setLabel("Channels").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId("setup_features").setLabel("Features").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("setup_preview").setLabel("Continue").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("setup_cancel").setLabel("Cancel").setStyle(ButtonStyle.Danger)
-  )
+const { guardCommand } = require('../../../../utils/commandGuard.js')
 
-const buildRolesRow = () =>
-  new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("setup_roles_moderator").setLabel("Set Moderator Roles").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId("setup_roles_admin").setLabel("Set Administrator Roles").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId("setup_roles_back").setLabel("Back").setStyle(ButtonStyle.Secondary)
-  )
+const COMMAND_ENABLED = true
 
-const buildChannelsRow = () =>
-  new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("setup_channels_mod").setLabel("Set Moderation Log").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId("setup_channels_server").setLabel("Set Server Log").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId("setup_channels_chat").setLabel("Set Chat Log").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId("setup_channels_back").setLabel("Back").setStyle(ButtonStyle.Secondary)
-  )
+module.exports = {
+  name: 'setup-builders-main.rows',
+  description: 'setup-builders-main.rows command',
+  data: { name: 'setup-builders-main.rows', description: 'setup-builders-main.rows command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-module.exports = { buildMainRow, buildRolesRow, buildChannelsRow }
+    const guard = await guardCommand({
+      commandName: 'setup',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
+  }
+}

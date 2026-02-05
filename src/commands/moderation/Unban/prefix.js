@@ -1,35 +1,33 @@
-const embed = require("../../../messages/embeds/punishment.embed")
-const errorEmbed = require("../../../messages/embeds/error.embed")
-const COLORS = require("../../../utils/colors")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  name: "unban",
-  async execute(msg, args) {
-    const id = args[0]
-    if (!id) return
+  name: 'unban-prefix',
+  description: 'unban-prefix command',
+  data: { name: 'unban-prefix', description: 'unban-prefix command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getUser ? interaction.options.getUser('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-    try {
-      await msg.guild.members.unban(id)
-    } catch {
-      return msg.channel.send({
-        embeds: [errorEmbed({
-          users: `<@${id}>`,
-          reason: "User not banned or missing permissions",
-          punishment: "unban",
-          state: "failed",
-          color: COLORS.error
-        })]
-      })
-    }
-
-    return msg.channel.send({
-      embeds: [embed({
-        users: `<@${id}>`,
-        punishment: "ban",
-        state: "removed",
-        reason: "Manual unban",
-        color: COLORS.success
-      })]
+    const guard = await guardCommand({
+      commandName: 'unban',
+      interaction,
+      requiredDiscordPerms: ['BanMembers'],
+      requireGuild: true,
+      requireTarget: true,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }

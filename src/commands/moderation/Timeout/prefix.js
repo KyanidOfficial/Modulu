@@ -1,42 +1,33 @@
-const parse = require("../../../utils/time")
-const embed = require("../../../messages/embeds/punishment.embed")
-const errorEmbed = require("../../../messages/embeds/error.embed")
-const COLORS = require("../../../utils/colors")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  name: "timeout",
-  async execute(msg, args) {
-    const member = msg.mentions.members.first()
-    const parsed = parse(args[1])
-    if (!member || !parsed) return
+  name: 'timeout-prefix',
+  description: 'timeout-prefix command',
+  data: { name: 'timeout-prefix', description: 'timeout-prefix command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = interaction && interaction.options && interaction.options.getInteger ? interaction.options.getInteger('duration_ms') : null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-    const reason = args.slice(2).join(" ") || "No reason provided"
-    const expiresAt = Math.floor((Date.now() + parsed.ms) / 1000)
-
-    try {
-      await member.timeout(parsed.ms, reason)
-    } catch {
-      return msg.channel.send({
-        embeds: [errorEmbed({
-          users: `@${member.user.username} (${member.user.tag})`,
-          reason: "Permission or hierarchy issue",
-          punishment: "timeout",
-          state: "failed",
-          color: COLORS.error
-        })]
-      })
-    }
-
-    return msg.channel.send({
-      embeds: [embed({
-        users: `@${member.user.username} (${member.user.tag})`,
-        punishment: "timeout",
-        state: "applied",
-        expiresAt,
-        reason,
-        duration: parsed.label,
-        color: COLORS.success
-      })]
+    const guard = await guardCommand({
+      commandName: 'timeout',
+      interaction,
+      requiredDiscordPerms: ['ModerateMembers'],
+      requireGuild: true,
+      requireTarget: true,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }

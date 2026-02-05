@@ -1,58 +1,33 @@
-const { SlashCommandBuilder } = require("discord.js")
-const staffPerms = require("../../../utils/staffPerms")
-const staffDb = require("../../../core/database/staffTime")
-const dmUser = require("../../../utils/dmUser")
+'use strict'
 
-const clockInEmbed = require("../../../messages/embeds/staffTime.clockin.embed")
-const errorEmbed = require("../../../messages/embeds/error.embed")
-const COLORS = require("../../../utils/colors")
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("clockin")
-    .setDescription("Clock in for staff duty"),
+  name: 'clockin',
+  description: 'clockin command',
+  data: { name: 'clockin', description: 'clockin command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-  async execute(interaction) {
-    const member = interaction.member
-    const guildId = interaction.guild.id
-
-    if (!(await staffPerms(guildId, member))) {
-      return interaction.editReply({
-        embeds: [errorEmbed({
-          users: `<@${member.id}>`,
-          punishment: "clockin",
-          state: "failed",
-          reason: "No permission",
-          color: COLORS.error
-        })]
-      })
-    }
-
-    const active = await staffDb.getActive(guildId, member.id)
-    if (active) {
-      return interaction.editReply({
-        embeds: [errorEmbed({
-          users: `<@${member.id}>`,
-          punishment: "clockin",
-          state: "failed",
-          reason: "Already clocked in",
-          color: COLORS.error
-        })]
-      })
-    }
-
-    await staffDb.startSession({
-      guildId,
-      userId: member.id,
-      startedAt: Date.now()
+    const guard = await guardCommand({
+      commandName: 'clockin',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
 
-    const embed = clockInEmbed()
-
-    await dmUser(member.user, embed)
-
-    return interaction.editReply({
-      embeds: [embed]
-    })
+    return { ok: true, reason: guard.reason }
   }
 }

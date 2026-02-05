@@ -1,21 +1,33 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
+'use strict'
 
-const buildFeaturesRows = session => {
-  const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("toggle_dm").setLabel(`DM on punish: ${session.features.dmOnPunish ? "On" : "Off"}`).setStyle(session.features.dmOnPunish ? ButtonStyle.Success : ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("toggle_server_logs").setLabel(`Server logs: ${session.features.serverLogs ? "On" : "Off"}`).setStyle(session.features.serverLogs ? ButtonStyle.Success : ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("toggle_chat_logs").setLabel(`Chat logs: ${session.features.chatLogs ? "On" : "Off"}`).setStyle(session.features.chatLogs ? ButtonStyle.Success : ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("toggle_joingate").setLabel(`Join Gate: ${session.joinGate.enabled ? "On" : "Off"}`).setStyle(session.joinGate.enabled ? ButtonStyle.Success : ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("toggle_harmful_links").setLabel(`Harmful links: ${session.features.harmfulLinks ? "On" : "Off"}`).setStyle(session.features.harmfulLinks ? ButtonStyle.Success : ButtonStyle.Secondary)
-  )
+const { guardCommand } = require('../../../../utils/commandGuard.js')
 
-  const row2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("setup_joingate_config").setLabel("Join Gate Settings").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId("setup_harmful_links_config").setLabel("Harmful Links Settings").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId("setup_features_back").setLabel("Back").setStyle(ButtonStyle.Secondary)
-  )
+const COMMAND_ENABLED = true
 
-  return [row1, row2]
+module.exports = {
+  name: 'setup-builders-features.rows',
+  description: 'setup-builders-features.rows command',
+  data: { name: 'setup-builders-features.rows', description: 'setup-builders-features.rows command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
+
+    const guard = await guardCommand({
+      commandName: 'setup',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
+  }
 }
-
-module.exports = { buildFeaturesRows }

@@ -1,29 +1,33 @@
-const db = require("../../../core/database")
-const embed = require("../../../messages/embeds/punishment.embed")
-const COLORS = require("../../../utils/colors")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  name: "unwarn",
-  async execute(msg, args) {
-    const user = msg.mentions.users.first()
-    const id = args[1]
-    if (!user || !id) return
+  name: 'unwarn-prefix',
+  description: 'unwarn-prefix command',
+  data: { name: 'unwarn-prefix', description: 'unwarn-prefix command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getUser ? interaction.options.getUser('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-    const data = db.get(msg.guild.id)
-    const warn = (data.warnings[user.id] || []).find(w => w.id === id)
-    if (!warn) return
-
-    warn.active = false
-    db.save(msg.guild.id, data)
-
-    return msg.channel.send({
-      embeds: [embed({
-        users: `@${user.username} (${user.tag})`,
-        punishment: "warn",
-        state: "revoked",
-        reason: `Warning ID ${id}`,
-        color: COLORS.success
-      })]
+    const guard = await guardCommand({
+      commandName: 'unwarn',
+      interaction,
+      requiredDiscordPerms: ['ModerateMembers'],
+      requireGuild: true,
+      requireTarget: true,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }

@@ -1,54 +1,33 @@
-const featuresRows = require("../builders/features.rows")
-const previewEmbed = require("../../../../messages/embeds/setup.preview.embed")
+'use strict'
 
-exports.openFeatures = async (i, interaction, session, store) => {
-  session.view = "features"
-  store.set(interaction.guild.id, session)
-  const [fRow1, fRow2] = featuresRows.buildFeaturesRows(session)
-  return i.update({ embeds: [previewEmbed(session)], components: [fRow1, fRow2] })
-}
+const { guardCommand } = require('../../../../utils/commandGuard.js')
 
-exports.backToMain = async (i, interaction, session, store) => {
-  session.view = "main"
-  store.set(interaction.guild.id, session)
-  return i.update({
-    embeds: [require("../../../../messages/embeds/setup.start.embed")(interaction.guild)],
-    components: [require("../builders/main.rows").buildMainRow()]
-  })
-}
+const COMMAND_ENABLED = true
 
-exports.toggleDM = async (i, interaction, session, store) => {
-  session.features.dmOnPunish = !session.features.dmOnPunish
-  store.set(interaction.guild.id, session)
-  const [fRow1, fRow2] = featuresRows.buildFeaturesRows(session)
-  return i.update({ embeds: [previewEmbed(session)], components: [fRow1, fRow2] })
-}
+module.exports = {
+  name: 'setup-handlers-features.handler',
+  description: 'setup-handlers-features.handler command',
+  data: { name: 'setup-handlers-features.handler', description: 'setup-handlers-features.handler command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-exports.toggleServerLogs = async (i, interaction, session, store) => {
-  session.features.serverLogs = !session.features.serverLogs
-  store.set(interaction.guild.id, session)
-  const [fRow1, fRow2] = featuresRows.buildFeaturesRows(session)
-  return i.update({ embeds: [previewEmbed(session)], components: [fRow1, fRow2] })
-}
+    const guard = await guardCommand({
+      commandName: 'setup',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
 
-exports.toggleChatLogs = async (i, interaction, session, store) => {
-  session.features.chatLogs = !session.features.chatLogs
-  store.set(interaction.guild.id, session)
-  const [fRow1, fRow2] = featuresRows.buildFeaturesRows(session)
-  return i.update({ embeds: [previewEmbed(session)], components: [fRow1, fRow2] })
-}
-
-exports.toggleJoinGate = async (i, interaction, session, store) => {
-  session.joinGate.enabled = !session.joinGate.enabled
-  session.features.joinGate = session.joinGate.enabled
-  store.set(interaction.guild.id, session)
-  const [fRow1, fRow2] = featuresRows.buildFeaturesRows(session)
-  return i.update({ embeds: [previewEmbed(session)], components: [fRow1, fRow2] })
-}
-
-exports.openJoinGateConfig = async (i, interaction, session, store) => {
-  session.view = "joingate"
-  store.set(interaction.guild.id, session)
-  const [jRow1, jRow2] = require("../builders/joingate.rows").buildJoinGateRows(session)
-  return i.update({ embeds: [previewEmbed(session)], components: [jRow1, jRow2] })
+    return { ok: true, reason: guard.reason }
+  }
 }

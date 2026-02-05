@@ -1,10 +1,33 @@
-const success = require("../../../messages/embeds/success.embed")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  name: "ping",
-  async execute(msg) {
-    return msg.channel.send({
-      embeds: [success("Pong")]
+  name: 'ping-prefix',
+  description: 'ping-prefix command',
+  data: { name: 'ping-prefix', description: 'ping-prefix command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
+
+    const guard = await guardCommand({
+      commandName: 'ping',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }

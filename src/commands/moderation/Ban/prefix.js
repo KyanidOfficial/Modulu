@@ -1,37 +1,33 @@
-const embed = require("../../../messages/embeds/punishment.embed")
-const errorEmbed = require("../../../messages/embeds/error.embed")
-const COLORS = require("../../../utils/colors")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  name: "ban",
-  async execute(msg, args) {
-    const member = msg.mentions.members.first()
-    if (!member) return
+  name: 'ban-prefix',
+  description: 'ban-prefix command',
+  data: { name: 'ban-prefix', description: 'ban-prefix command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getUser ? interaction.options.getUser('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-    const reason = args.slice(1).join(" ") || "No reason provided"
-
-    try {
-      await member.ban({ reason })
-    } catch {
-      return msg.channel.send({
-        embeds: [errorEmbed({
-          users: `@${member.user.username} (${member.user.tag})`,
-          reason: "Permission or hierarchy issue",
-          punishment: "ban",
-          state: "failed",
-          color: COLORS.error
-        })]
-      })
-    }
-
-    return msg.channel.send({
-      embeds: [embed({
-        users: `@${member.user.username} (${member.user.tag})`,
-        punishment: "ban",
-        state: "applied",
-        reason,
-        color: COLORS.success
-      })]
+    const guard = await guardCommand({
+      commandName: 'ban',
+      interaction,
+      requiredDiscordPerms: ['BanMembers'],
+      requireGuild: true,
+      requireTarget: true,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }

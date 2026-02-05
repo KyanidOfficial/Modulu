@@ -1,34 +1,33 @@
-const { EmbedBuilder } = require("discord.js")
-const COLORS = require("../../../utils/colors")
-const canUse = require("../../../core/middleware/permissions")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  name: "help",
+  name: 'help-prefix',
+  description: 'help-prefix command',
+  data: { name: 'help-prefix', description: 'help-prefix command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-  async execute(interaction) {
-    const commands = [...interaction.client.commands.values()]
-      .filter(c => c.meta)
-      .filter(c => canUse(interaction.member, c.meta.permissions || []))
+    const guard = await guardCommand({
+      commandName: 'help',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
 
-    const categories = {}
-    for (const c of commands) {
-      if (!categories[c.meta.category]) categories[c.meta.category] = []
-      categories[c.meta.category].push(c)
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor(COLORS.success)
-      .setTitle("Help")
-      .setDescription(
-        Object.entries(categories)
-          .map(([cat, cmds]) =>
-            `**${cat}**\n` +
-            cmds.map(c =>
-              `**/${c.data?.name || c.name} | ${process.env.PREFIX}${c.name}`
-            ).join("\n")
-          ).join("\n\n")
-      )
-
-    return interaction.reply({ embeds: [embed] })
+    return { ok: true, reason: guard.reason }
   }
 }

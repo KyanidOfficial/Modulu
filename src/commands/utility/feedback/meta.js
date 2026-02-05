@@ -1,6 +1,33 @@
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
+
 module.exports = {
-  category: "Utility",
-  description: "Send feedback to the bot developers",
-  usage: "feedback",
-  example: "feedback"
+  name: 'feedback-meta',
+  description: 'feedback-meta command',
+  data: { name: 'feedback-meta', description: 'feedback-meta command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
+
+    const guard = await guardCommand({
+      commandName: 'feedback',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
+  }
 }

@@ -1,14 +1,33 @@
-const { SlashCommandBuilder } = require("discord.js")
-const success = require("../../../messages/embeds/success.embed")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("ping")
-    .setDescription("Ping"),
+  name: 'ping',
+  description: 'ping command',
+  data: { name: 'ping', description: 'ping command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-  async execute(interaction) {
-    return interaction.reply({
-      embeds: [success("Pong")]
+    const guard = await guardCommand({
+      commandName: 'ping',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }

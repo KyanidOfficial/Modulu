@@ -1,56 +1,63 @@
-const fs = require("fs")
-const path = require("path")
-const registry = require("../registry/slash.commands")
+'use strict'
 
-module.exports = client => {
-  console.log("Slash loader started")
+const fs = require('fs')
+const path = require('path')
+const { isCommandEnabled, requireEnabled } = require('../../utils/commandToggle')
 
-  const base = path.join(__dirname, "..", "..", "commands")
-  if (!fs.existsSync(base)) return
+const loadSlashCommands = baseDir => {
+  const commands = []
+  const names = new Set()
+  const base = baseDir || path.join(__dirname, '..', '..', 'commands')
+  if (!fs.existsSync(base)) return commands
 
   for (const category of fs.readdirSync(base)) {
-    const catPath = path.join(base, category)
-    if (!fs.statSync(catPath).isDirectory()) continue
+    const categoryPath = path.join(base, category)
+    if (!fs.statSync(categoryPath).isDirectory()) continue
 
-    for (const folder of fs.readdirSync(catPath)) {
-      const cmdPath = path.join(catPath, folder)
-      if (!fs.statSync(cmdPath).isDirectory()) continue
+    for (const folder of fs.readdirSync(categoryPath)) {
+      const folderPath = path.join(categoryPath, folder)
+      if (!fs.statSync(folderPath).isDirectory()) continue
 
-      const slashPath = path.join(cmdPath, "slash.js")
+      const slashPath = path.join(folderPath, 'slash.js')
       if (!fs.existsSync(slashPath)) continue
 
+      let command
       try {
-        const command = require(slashPath)
-
-        if (!command) continue
-        if (!command.data || !command.data.name) {
-          console.error("Missing command data", slashPath)
-          continue
-        }
-
-        if (typeof command.execute !== "function") {
-          console.error("Missing execute()", command.data.name)
-          continue
-        }
-
-        if (client.commands.has(command.data.name)) {
-          console.error("Duplicate command name", command.data.name)
-          continue
-        }
-
-        const metaPath = path.join(cmdPath, "meta.js")
-        command.meta = fs.existsSync(metaPath) ? require(metaPath) : {}
-
-        registry.set(command.data.name, command)
-        client.commands.set(command.data.name, command)
-
-        console.log("Loaded slash command", command.data.name)
+        command = require(slashPath)
       } catch (err) {
-        console.error("Failed to load command", slashPath)
-        console.error(err)
+        console.error('Failed to load command', slashPath, err.message)
+        throw err
       }
+
+      const enabled = requireEnabled(command)
+      if (!enabled.ok) {
+        console.log('Skipped disabled command', slashPath, enabled.reason)
+        continue
+      }
+
+      if (!command || !command.name || !command.data || !command.execute) {
+        const err = new Error(`Invalid command schema: ${slashPath}`)
+        console.error(err.message)
+        throw err
+      }
+
+      if (names.has(command.name)) {
+        const err = new Error(`Duplicate command name: ${command.name}`)
+        console.error(err.message)
+        throw err
+      }
+
+      if (!isCommandEnabled(command)) {
+        console.log('Skipped disabled command', slashPath, 'COMMAND_ENABLED=false')
+        continue
+      }
+
+      names.add(command.name)
+      commands.push(command)
     }
   }
 
-  console.log("Slash loader finished", client.commands.size)
+  return commands
 }
+
+module.exports = { loadSlashCommands }

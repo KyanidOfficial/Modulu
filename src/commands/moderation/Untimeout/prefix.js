@@ -1,35 +1,33 @@
-const embed = require("../../../messages/embeds/punishment.embed")
-const errorEmbed = require("../../../messages/embeds/error.embed")
-const COLORS = require("../../../utils/colors")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  name: "untimeout",
-  async execute(msg) {
-    const member = msg.mentions.members.first()
-    if (!member) return
+  name: 'untimeout-prefix',
+  description: 'untimeout-prefix command',
+  data: { name: 'untimeout-prefix', description: 'untimeout-prefix command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-    try {
-      await member.timeout(null)
-    } catch {
-      return msg.channel.send({
-        embeds: [errorEmbed({
-          users: `@${member.user.username} (${member.user.tag})`,
-          reason: "Permission or hierarchy issue",
-          punishment: "untimeout",
-          state: "failed",
-          color: COLORS.error
-        })]
-      })
-    }
-
-    return msg.channel.send({
-      embeds: [embed({
-        users: `@${member.user.username} (${member.user.tag})`,
-        punishment: "timeout",
-        state: "removed",
-        reason: "Manual removal",
-        color: COLORS.success
-      })]
+    const guard = await guardCommand({
+      commandName: 'untimeout',
+      interaction,
+      requiredDiscordPerms: ['ModerateMembers'],
+      requireGuild: true,
+      requireTarget: true,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }

@@ -1,49 +1,33 @@
-const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
-const db = require("../../../core/database")
-const warnsEmbed = require("../../../messages/embeds/warns.embed")
-const errorEmbed = require("../../../messages/embeds/error.embed")
-const COLORS = require("../../../utils/colors")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("warns")
-    .setDescription("View user warnings")
-    .addUserOption(o =>
-      o.setName("user").setDescription("Target user").setRequired(true)
-    ),
+  name: 'warns',
+  description: 'warns command',
+  data: { name: 'warns', description: 'warns command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getUser ? interaction.options.getUser('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-  async execute(interaction) {
-    const guild = interaction.guild
-    if (!guild) throw new Error("No guild context")
-
-    const executor = interaction.member
-    const user = interaction.options.getUser("user")
-
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return interaction.editReply({
-        embeds: [errorEmbed({
-          users: `<@${interaction.user.id}>`,
-          punishment: "warns",
-          state: "failed",
-          reason: "Missing permissions",
-          color: COLORS.error
-        })]
-      })
-    }
-
-    const list = await db.getWarnings(guild.id, user.id)
-
-    const content = list.length
-      ? list.map(w =>
-          `\`${w.id}\`\n` +
-          `**Status:** ${w.active ? "Active" : "Revoked"}\n` +
-          `**Reason:** ${w.reason}\n` +
-          `**Issued By:** <@${w.moderator_id}>`
-        ).join("\n\n")
-      : "No warnings"
-
-    return interaction.editReply({
-      embeds: [warnsEmbed(`<@${user.id}>`, content)]
+    const guard = await guardCommand({
+      commandName: 'warns',
+      interaction,
+      requiredDiscordPerms: ['ModerateMembers'],
+      requireGuild: true,
+      requireTarget: true,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }

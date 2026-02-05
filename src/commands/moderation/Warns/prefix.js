@@ -1,23 +1,33 @@
-const db = require("../../../core/database")
-const warnsEmbed = require("../../../messages/embeds/warns.embed")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  name: "warns",
-  async execute(msg) {
-    const user = msg.mentions.users.first()
-    if (!user) return
+  name: 'warns-prefix',
+  description: 'warns-prefix command',
+  data: { name: 'warns-prefix', description: 'warns-prefix command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getUser ? interaction.options.getUser('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-    const list = db.get(msg.guild.id).warnings[user.id] || []
-
-    return msg.channel.send({
-      embeds: [warnsEmbed(
-        `@${user.username} (${user.tag})`,
-        list.length
-          ? list.map(w =>
-              `\`${w.id}\`\nStatus: ${w.active ? "Active" : "Revoked"}\nReason: ${w.reason}\nBy: <@${w.moderator}>`
-            ).join("\n\n")
-          : "No warnings"
-      )]
+    const guard = await guardCommand({
+      commandName: 'warns',
+      interaction,
+      requiredDiscordPerms: ['ModerateMembers'],
+      requireGuild: true,
+      requireTarget: true,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }

@@ -1,133 +1,33 @@
-const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
-const embed = require("../../../messages/embeds/punishment.embed")
-const errorEmbed = require("../../../messages/embeds/error.embed")
-const dmUser = require("../../../utils/maybeDM")
-const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
-const COLORS = require("../../../utils/colors")
-const logAction = require("../../../utils/logAction")
-const logEmbed = require("../../../messages/embeds/log.embed")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("untimeout")
-    .setDescription("Remove a timeout")
-    .addUserOption(o =>
-      o.setName("user").setDescription("Target user").setRequired(true)
-    ),
+  name: 'untimeout',
+  description: 'untimeout command',
+  data: { name: 'untimeout', description: 'untimeout command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-  async execute(interaction) {
-    const guild = interaction.guild
-    if (!guild) {
-      throw new Error("No guild context")
-    }
-
-    const member = interaction.options.getMember("user")
-    const executor = interaction.member
-
-    if (!member) {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: "Unknown user",
-            punishment: "untimeout",
-            state: "failed",
-            reason: "Member not found",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: `<@${interaction.user.id}>`,
-            punishment: "untimeout",
-            state: "failed",
-            reason: "Missing permissions",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
-    if (!guild.members.me.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: `<@${member.id}>`,
-            punishment: "untimeout",
-            state: "failed",
-            reason: "Bot lacks permissions",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
-    if (member.roles.highest.position >= executor.roles.highest.position) {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: `<@${member.id}>`,
-            punishment: "untimeout",
-            state: "failed",
-            reason: "Role hierarchy issue",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
-    try {
-      await member.timeout(null)
-    } catch {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: `<@${member.id}>`,
-            punishment: "untimeout",
-            state: "failed",
-            reason: "Failed to remove timeout",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
-    await logAction(
-      guild,
-      logEmbed({
-        punishment: "untimeout",
-        user: `<@${member.id}>`,
-        moderator: `<@${interaction.user.id}>`,
-        reason: "Manual removal",
-        color: COLORS.success
-      })
-    )
-
-    await dmUser(
-      guild.id,
-      member.user,
-      dmEmbed({
-        punishment: "untimeout",
-        reason: "Manual removal",
-        guild: guild.name,
-        color: COLORS.warning
-      })
-    )
-
-    return interaction.editReply({
-      embeds: [
-        embed({
-          users: `<@${member.id}>`,
-          punishment: "untimeout",
-          state: "removed",
-          reason: "Manual removal",
-          color: COLORS.success
-        })
-      ]
+    const guard = await guardCommand({
+      commandName: 'untimeout',
+      interaction,
+      requiredDiscordPerms: ['ModerateMembers'],
+      requireGuild: true,
+      requireTarget: true,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }

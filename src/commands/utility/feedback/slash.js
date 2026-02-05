@@ -1,34 +1,33 @@
-const {
-  SlashCommandBuilder,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  ActionRowBuilder
-} = require("discord.js")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  skipDefer: true,
+  name: 'feedback',
+  description: 'feedback command',
+  data: { name: 'feedback', description: 'feedback command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-  data: new SlashCommandBuilder()
-    .setName("feedback")
-    .setDescription("Send feedback to the bot developers"),
+    const guard = await guardCommand({
+      commandName: 'feedback',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
 
-  async execute(interaction) {
-    const modal = new ModalBuilder()
-      .setCustomId("feedback_modal")
-      .setTitle("Send Feedback")
-
-    const input = new TextInputBuilder()
-      .setCustomId("feedback_message")
-      .setLabel("Your feedback")
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true)
-      .setMaxLength(1000)
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(input)
-    )
-
-    await interaction.showModal(modal)
+    return { ok: true, reason: guard.reason }
   }
 }

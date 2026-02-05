@@ -1,22 +1,33 @@
-const createDraft = (saved, gateRow) => {
-  const draft = saved
-    ? JSON.parse(JSON.stringify(saved))
-    : {
-        roles: { moderators: [], administrators: [] },
-        channels: { logs: null, serverLogs: null, chatLogs: null, appeals: null, suspicious: null },
-        features: { dmOnPunish: true, serverLogs: true, chatLogs: false }
-      }
+'use strict'
 
-  draft.joinGate = {
-    enabled: gateRow?.enabled ?? false,
-    accountAgeDays: gateRow?.account_age_days ?? 7,
-    requireAvatar: gateRow?.require_avatar ?? true
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
+
+module.exports = {
+  name: 'setup-defaults',
+  description: 'setup-defaults command',
+  data: { name: 'setup-defaults', description: 'setup-defaults command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
+
+    const guard = await guardCommand({
+      commandName: 'setup',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
-
-  draft.features = draft.features || {}
-  draft.features.joinGate = draft.joinGate.enabled
-
-  return draft
 }
-
-module.exports = { createDraft }

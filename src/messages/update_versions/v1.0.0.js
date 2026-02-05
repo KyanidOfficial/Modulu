@@ -1,6 +1,3 @@
-module.exports = {
-  version: "v1.0.0",
-  changes: [
-    "Initial release"
-  ]
-}
+'use strict'
+
+module.exports = {}

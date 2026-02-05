@@ -1,19 +1,33 @@
-const { EmbedBuilder } = require("discord.js")
-const COLORS = require("../../../utils/colors")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  name: "info",
+  name: 'info-prefix',
+  description: 'info-prefix command',
+  data: { name: 'info-prefix', description: 'info-prefix command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-  async execute(msg) {
-    const embed = new EmbedBuilder()
-      .setColor(COLORS.success)
-      .setTitle("Bot Information")
-      .setDescription(
-        "**Lead Developer/Founder:** `@_.kyanid._`\n" +
-        `**Version:** ${process.env.BOT_VERSION}\n\n` +
-        "Use `/info` for interactive menu."
-      )
+    const guard = await guardCommand({
+      commandName: 'info',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
 
-    msg.channel.send({ embeds: [embed] })
+    return { ok: true, reason: guard.reason }
   }
 }

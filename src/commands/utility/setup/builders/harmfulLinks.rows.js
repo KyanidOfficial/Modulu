@@ -1,23 +1,33 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
+'use strict'
 
-const buildHarmfulLinksRows = session => {
-  const timeout = session.harmfulLinks?.timeout || { enabled: false, duration: 10 * 60 * 1000 }
-  const minutes = Math.max(1, Math.round(timeout.duration / 60000))
+const { guardCommand } = require('../../../../utils/commandGuard.js')
 
-  return [
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("toggle_hl_scanstaff").setLabel(`Scan staff: ${session.harmfulLinks.scanStaff ? "On" : "Off"}`).setStyle(session.harmfulLinks.scanStaff ? ButtonStyle.Success : ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("toggle_hl_timeout").setLabel(`Timeout: ${timeout.enabled ? "On" : "Off"}`).setStyle(timeout.enabled ? ButtonStyle.Success : ButtonStyle.Secondary)
-    ),
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("hl_time_minus").setLabel("-").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("hl_time_info").setLabel(`Timeout (min): ${minutes}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
-      new ButtonBuilder().setCustomId("hl_time_plus").setLabel("+").setStyle(ButtonStyle.Secondary)
-    ),
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("setup_hl_back").setLabel("Back").setStyle(ButtonStyle.Secondary)
-    )
-  ]
+const COMMAND_ENABLED = true
+
+module.exports = {
+  name: 'setup-builders-harmfulLinks.rows',
+  description: 'setup-builders-harmfulLinks.rows command',
+  data: { name: 'setup-builders-harmfulLinks.rows', description: 'setup-builders-harmfulLinks.rows command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
+
+    const guard = await guardCommand({
+      commandName: 'setup',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
+  }
 }
-
-module.exports = { buildHarmfulLinksRows }

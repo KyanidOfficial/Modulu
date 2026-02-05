@@ -1,18 +1,33 @@
-const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
+'use strict'
 
-const buildJoinGateRows = session => {
-  const row1 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("setup_joingate_age_minus").setLabel("-").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("setup_joingate_age_info").setLabel(`Account age days: ${session.joinGate.accountAgeDays}`).setStyle(ButtonStyle.Secondary).setDisabled(true),
-    new ButtonBuilder().setCustomId("setup_joingate_age_plus").setLabel("+").setStyle(ButtonStyle.Secondary)
-  )
+const { guardCommand } = require('../../../../utils/commandGuard.js')
 
-  const row2 = new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("setup_joingate_requireAvatar").setLabel(`Require Avatar: ${session.joinGate.requireAvatar ? "On" : "Off"}`).setStyle(session.joinGate.requireAvatar ? ButtonStyle.Success : ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("setup_joingate_back").setLabel("Back").setStyle(ButtonStyle.Secondary)
-  )
+const COMMAND_ENABLED = true
 
-  return [row1, row2]
+module.exports = {
+  name: 'setup-builders-joingate.rows',
+  description: 'setup-builders-joingate.rows command',
+  data: { name: 'setup-builders-joingate.rows', description: 'setup-builders-joingate.rows command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
+
+    const guard = await guardCommand({
+      commandName: 'setup',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
+  }
 }
-
-module.exports = { buildJoinGateRows }

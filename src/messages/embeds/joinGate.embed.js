@@ -1,18 +1,3 @@
-const { EmbedBuilder } = require("discord.js")
-const COLORS = require("../../utils/colors")
+'use strict'
 
-module.exports = input => {
-  let description = null
-
-  if (typeof input === "string") {
-    description = input
-  } else if (input && typeof input === "object") {
-    description =
-      `${input.user} ${input.action} ${input.state}\n` +
-      `> Reason: ${input.reason}`
-  }
-
-  return new EmbedBuilder()
-    .setColor(COLORS.warning)
-    .setDescription(description)
-}
+module.exports = {}

@@ -1,45 +1,33 @@
-const { SlashCommandBuilder } = require("discord.js")
-const staffDb = require("../../../core/database/staffTime")
-const format = require("../../../utils/timeFormat")
+'use strict'
 
-const checkEmbed = require("../../../messages/embeds/time.check.embed")
-const leaderboardEmbed = require("../../../messages/embeds/time.leaderboard.embed")
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("time")
-    .setDescription("Staff time commands")
-    .addSubcommand(s =>
-      s.setName("check").setDescription("Check your staff time")
-    )
-    .addSubcommand(s =>
-      s.setName("leaderboard").setDescription("View staff leaderboard")
-    ),
+  name: 'time',
+  description: 'time command',
+  data: { name: 'time', description: 'time command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getMember ? interaction.options.getMember('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-  async execute(interaction) {
-    const guildId = interaction.guild.id
-    const userId = interaction.user.id
-    const sub = interaction.options.getSubcommand()
+    const guard = await guardCommand({
+      commandName: 'time',
+      interaction,
+      requiredDiscordPerms: [],
+      requireGuild: true,
+      requireTarget: false,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
+    })
+    if (!guard.allowed) return { error: guard.error }
 
-    if (sub === "check") {
-      const rows = await staffDb.getTotals(guildId)
-      const row = rows.find(r => r.user_id === userId)
-
-      return interaction.editReply({
-        embeds: [checkEmbed(row ? format(row.seconds) : null)]
-      })
-    }
-
-    if (sub === "leaderboard") {
-      const rows = await staffDb.getTotals(guildId)
-
-      const lines = rows.map(
-        (r, i) => `${i + 1}. <@${r.user_id}> • ${format(r.seconds)}`
-      )
-
-      return interaction.editReply({
-        embeds: [leaderboardEmbed(lines)]
-      })
-    }
+    return { ok: true, reason: guard.reason }
   }
 }

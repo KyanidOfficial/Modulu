@@ -1,104 +1,33 @@
-const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
-const db = require("../../../core/database")
-const embed = require("../../../messages/embeds/punishment.embed")
-const errorEmbed = require("../../../messages/embeds/error.embed")
-const dmUser = require("../../../utils/maybeDM")
-const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
-const COLORS = require("../../../utils/colors")
-const logAction = require("../../../utils/logAction")
-const logEmbed = require("../../../messages/embeds/log.embed")
+'use strict'
+
+const { guardCommand } = require('../../../utils/commandGuard.js')
+
+const COMMAND_ENABLED = true
 
 module.exports = {
-  data: new SlashCommandBuilder()
-    .setName("unwarn")
-    .setDescription("Revoke a warning")
-    .addUserOption(o =>
-      o.setName("user").setDescription("Target user").setRequired(true)
-    )
-    .addStringOption(o =>
-      o.setName("id").setDescription("Warning ID").setRequired(true)
-    ),
+  name: 'unwarn',
+  description: 'unwarn command',
+  data: { name: 'unwarn', description: 'unwarn command' },
+  COMMAND_ENABLED,
+  execute: async interaction => {
+    const guild = interaction && interaction.guild
+    const target = interaction && interaction.options && interaction.options.getUser ? interaction.options.getUser('user') : null
+    const durationMs = null
+    const reason = interaction && interaction.options && interaction.options.getString ? interaction.options.getString('reason') : null
 
-  async execute(interaction) {
-    const guild = interaction.guild
-    if (!guild) throw new Error("No guild context")
-
-    const executor = interaction.member
-    const user = interaction.options.getUser("user")
-    const warnId = interaction.options.getString("id")
-
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return interaction.editReply({
-        embeds: [errorEmbed({
-          users: `<@${interaction.user.id}>`,
-          punishment: "unwarn",
-          state: "failed",
-          reason: "Missing permissions",
-          color: COLORS.error
-        })]
-      })
-    }
-
-    const warnings = await db.getWarnings(guild.id, user.id)
-    const warn = warnings.find(w => w.id === warnId)
-
-    if (!warn) {
-      return interaction.editReply({
-        embeds: [errorEmbed({
-          users: `<@${user.id}>`,
-          punishment: "unwarn",
-          state: "failed",
-          reason: "Invalid warning ID",
-          color: COLORS.error
-        })]
-      })
-    }
-
-    if (!warn.active) {
-      return interaction.editReply({
-        embeds: [errorEmbed({
-          users: `<@${user.id}>`,
-          punishment: "unwarn",
-          state: "failed",
-          reason: "Warning already revoked",
-          color: COLORS.error
-        })]
-      })
-    }
-
-    await db.revokeWarning(warnId)
-
-    await logAction(
-      guild,
-      logEmbed({
-        punishment: "unwarn",
-        user: `<@${user.id}>`,
-        moderator: `<@${interaction.user.id}>`,
-        reason: `Manual removal: ${warnId}`,
-        color: COLORS.success,
-        caseId: warnId
-      })
-    )
-
-    await dmUser(
-      guild.id,
-      user,
-      dmEmbed({
-        punishment: "unwarn",
-        reason: `Manual removal: ${warnId}`,
-        guild: guild.name,
-        color: COLORS.success
-      })
-    )
-
-    return interaction.editReply({
-      embeds: [embed({
-        users: `<@${user.id}>`,
-        punishment: "warn",
-        state: "revoked",
-        reason: `Manual removal: ${warnId}`,
-        color: COLORS.success
-      })]
+    const guard = await guardCommand({
+      commandName: 'unwarn',
+      interaction,
+      requiredDiscordPerms: ['ModerateMembers'],
+      requireGuild: true,
+      requireTarget: true,
+      durationMs,
+      reason,
+      target,
+      commandEnabled: COMMAND_ENABLED
     })
+    if (!guard.allowed) return { error: guard.error }
+
+    return { ok: true, reason: guard.reason }
   }
 }
