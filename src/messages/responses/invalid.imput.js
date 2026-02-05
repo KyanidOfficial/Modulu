@@ -1,1 +1,3 @@
-module.exports = "Invalid input."
+'use strict'
+
+module.exports = {}

@@ -1,6 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Utility",
-  description: "Clock in for staff duty",
-  usage: "clockin",
-  example: "clockin",
+  name: 'clockin',
+  description: 'clockin command',
+  data: { name: 'clockin', description: 'clockin command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

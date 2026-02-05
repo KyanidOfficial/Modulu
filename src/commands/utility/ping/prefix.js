@@ -1,10 +1,9 @@
-const success = require("../../../messages/embeds/success.embed")
+'use strict'
 
 module.exports = {
-  name: "ping",
-  async execute(msg) {
-    return msg.channel.send({
-      embeds: [success("Pong")]
-    })
-  }
+  name: 'ping',
+  description: 'ping command',
+  data: { name: 'ping', description: 'ping command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

@@ -1,6 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Utility",
-  description: "Send feedback to the bot developers",
-  usage: "feedback",
-  example: "feedback"
+  name: 'feedback',
+  description: 'feedback command',
+  data: { name: 'feedback', description: 'feedback command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

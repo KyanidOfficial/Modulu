@@ -1,8 +1,3 @@
-const { EmbedBuilder } = require("discord.js")
-const COLORS = require("../../utils/colors")
+'use strict'
 
-module.exports = ({ title, description }) =>
-  new EmbedBuilder()
-    .setColor(COLORS.info)
-    .setTitle(title)
-    .setDescription(description)
+module.exports = {}

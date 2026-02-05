@@ -1,7 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Moderation",
-  description: "Issue a warning",
-  usage: "warn <user> [reason]",
-  example: "warn @user Spamming",
-  permissions: ["ModerateMembers"]
+  name: 'warn',
+  description: 'warn command',
+  data: { name: 'warn', description: 'warn command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

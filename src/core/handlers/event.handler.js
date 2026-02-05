@@ -1,5 +1,3 @@
-const eventLoader = require("../loaders/event.loader")
+'use strict'
 
-module.exports = client => {
-  eventLoader(client)
-}
+module.exports = {}

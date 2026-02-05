@@ -1,6 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Utility",
-  description: "Show help menu",
-  usage: "help",
-  example: "help"
+  name: 'help',
+  description: 'help command',
+  data: { name: 'help', description: 'help command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

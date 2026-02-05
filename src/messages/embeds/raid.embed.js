@@ -1,11 +1,3 @@
-const { EmbedBuilder } = require("discord.js")
-const COLORS = require("../../utils/colors")
+'use strict'
 
-module.exports = input =>
-  new EmbedBuilder()
-    .setColor(COLORS.warning)
-    .setDescription(
-      input.state === "started"
-        ? `Raid detected. ${input.joins} joins in short time.`
-        : "Raid ended."
-    )
+module.exports = {}

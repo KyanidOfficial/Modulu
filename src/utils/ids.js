@@ -1,1 +1,3 @@
-module.exports = () => Date.now().toString()
+'use strict'
+
+module.exports = {}

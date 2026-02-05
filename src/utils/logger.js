@@ -1,1 +1,3 @@
-module.exports = console
+'use strict'
+
+module.exports = {}

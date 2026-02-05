@@ -1,7 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Utility",
-  description: "View bot information",
-  usage: "info",
-  example: "info",
-  permissions: []
+  name: 'info',
+  description: 'info command',
+  data: { name: 'info', description: 'info command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

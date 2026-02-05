@@ -1,22 +1,9 @@
-const createDraft = (saved, gateRow) => {
-  const draft = saved
-    ? JSON.parse(JSON.stringify(saved))
-    : {
-        roles: { moderators: [], administrators: [] },
-        channels: { logs: null, serverLogs: null, chatLogs: null, appeals: null, suspicious: null },
-        features: { dmOnPunish: true, serverLogs: true, chatLogs: false }
-      }
+'use strict'
 
-  draft.joinGate = {
-    enabled: gateRow?.enabled ?? false,
-    accountAgeDays: gateRow?.account_age_days ?? 7,
-    requireAvatar: gateRow?.require_avatar ?? true
-  }
-
-  draft.features = draft.features || {}
-  draft.features.joinGate = draft.joinGate.enabled
-
-  return draft
+module.exports = {
+  name: 'setup',
+  description: 'setup command',
+  data: { name: 'setup', description: 'setup command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }
-
-module.exports = { createDraft }

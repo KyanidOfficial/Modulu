@@ -1,1 +1,3 @@
-module.exports = "Command failed."
+'use strict'
+
+module.exports = {}

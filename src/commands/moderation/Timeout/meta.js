@@ -1,7 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Moderation",
-  description: "Timeout a user",
-  usage: "timeout <user> <time> [reason]",
-  example: "timeout @user 10m Spamming",
-  permissions: ["ModerateMembers"]
+  name: 'timeout',
+  description: 'timeout command',
+  data: { name: 'timeout', description: 'timeout command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

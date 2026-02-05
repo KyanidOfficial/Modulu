@@ -1,7 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Moderation",
-  description: "Ban a user from the server",
-  usage: "ban <user> [reason]",
-  example: "ban @user Raiding",
-  permissions: ["BanMembers"]
+  name: 'ban',
+  description: 'ban command',
+  data: { name: 'ban', description: 'ban command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

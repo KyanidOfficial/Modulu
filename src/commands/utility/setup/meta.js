@@ -1,6 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Utility",
-  description: "Setup the bot for your server",
-  usage: "setup",
-  example: "setup"
+  name: 'setup',
+  description: 'setup command',
+  data: { name: 'setup', description: 'setup command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

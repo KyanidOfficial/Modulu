@@ -1,34 +1,9 @@
-const {
-  SlashCommandBuilder,
-  ModalBuilder,
-  TextInputBuilder,
-  TextInputStyle,
-  ActionRowBuilder
-} = require("discord.js")
+'use strict'
 
 module.exports = {
-  skipDefer: true,
-
-  data: new SlashCommandBuilder()
-    .setName("feedback")
-    .setDescription("Send feedback to the bot developers"),
-
-  async execute(interaction) {
-    const modal = new ModalBuilder()
-      .setCustomId("feedback_modal")
-      .setTitle("Send Feedback")
-
-    const input = new TextInputBuilder()
-      .setCustomId("feedback_message")
-      .setLabel("Your feedback")
-      .setStyle(TextInputStyle.Paragraph)
-      .setRequired(true)
-      .setMaxLength(1000)
-
-    modal.addComponents(
-      new ActionRowBuilder().addComponents(input)
-    )
-
-    await interaction.showModal(modal)
-  }
+  name: 'feedback',
+  description: 'feedback command',
+  data: { name: 'feedback', description: 'feedback command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

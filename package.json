@@ -4,7 +4,8 @@
   "main": "src/index.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "postinstall": "node scripts/fix-magic-bytes.js"
   },
   "dependencies": {
     "discord.js": "^14.25.1",

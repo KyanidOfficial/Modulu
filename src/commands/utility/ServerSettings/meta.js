@@ -1,6 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Utility",
-  description: "Edit the server settings",
-  usage: "server settings",
-  example: "server settings"
+  name: 'serversettings',
+  description: 'serversettings command',
+  data: { name: 'serversettings', description: 'serversettings command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

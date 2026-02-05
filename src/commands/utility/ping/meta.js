@@ -1,6 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Utility",
-  description: "Ping the bot",
-  usage: "ping",
-  example: "ping"
+  name: 'ping',
+  description: 'ping command',
+  data: { name: 'ping', description: 'ping command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

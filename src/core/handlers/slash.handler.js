@@ -1,5 +1,3 @@
-const slashLoader = require("../loaders/slash.loader")
+'use strict'
 
-module.exports = client => {
-  slashLoader(client)
-}
+module.exports = {}

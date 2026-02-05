@@ -1,6 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Utility",
-  description: "View and manage staff duty time",
-  usage: "time <check|leaderboard>",
-  example: "time check"
+  name: 'time',
+  description: 'time command',
+  data: { name: 'time', description: 'time command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

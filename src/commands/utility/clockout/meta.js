@@ -1,6 +1,9 @@
+'use strict'
+
 module.exports = {
-  category: "Staff",
-  description: "Clock out from staff duty",
-  usage: "clockout",
-  example: "clockout",
+  name: 'clockout',
+  description: 'clockout command',
+  data: { name: 'clockout', description: 'clockout command' },
+  COMMAND_ENABLED: true,
+  execute: async () => {}
 }

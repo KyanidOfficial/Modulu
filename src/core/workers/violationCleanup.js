@@ -1,11 +1,3 @@
-const db = require("../database")
+'use strict'
 
-module.exports = () => {
-  setInterval(async () => {
-    try {
-      await db.cleanupViolations(30)
-    } catch (err) {
-      console.error("[VIOLATION CLEANUP] failed", err)
-    }
-  }, 5 * 60 * 1000)
-}
+module.exports = {}
