@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 
 const store = require("../../../core/setup/session.store")
@@ -19,6 +20,7 @@ const harmfulLinksRows = require("./builders/harmfulLinks.rows")
 const dispatcher = require("./handlers/dispatcher")
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("setup")
     .setDescription("Guided server setup"),

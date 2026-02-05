@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const parse = require("../../../utils/time")
 const embed = require("../../../messages/embeds/punishment.embed")
@@ -5,10 +6,11 @@ const errorEmbed = require("../../../messages/embeds/error.embed")
 const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
-const logAction = require("../../../utils/logAction")
-const logEmbed = require("../../../messages/embeds/log.embed")
+const logModerationAction = require("../../../utils/logModerationAction")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("timeout")
     .setDescription("Timeout a user")
@@ -63,14 +65,19 @@ module.exports = {
 
     const executor = interaction.member
 
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
+    })
+    if (!access.allowed) {
       return interaction.editReply({
         embeds: [
           errorEmbed({
             users: `<@${interaction.user.id}>`,
             punishment: "timeout",
             state: "failed",
-            reason: "Missing permissions",
+            reason: access.reason,
             color: COLORS.error
           })
         ]
@@ -91,6 +98,34 @@ module.exports = {
       })
     }
 
+    if (member.id === interaction.user.id) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "timeout",
+            state: "failed",
+            reason: "You cannot timeout yourself",
+            color: COLORS.error
+          })
+        ]
+      })
+    }
+
+    if (member.id === guild.members.me.id) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "timeout",
+            state: "failed",
+            reason: "You cannot timeout the bot",
+            color: COLORS.error
+          })
+        ]
+      })
+    }
+
     if (member.roles.highest.position >= executor.roles.highest.position) {
       return interaction.editReply({
         embeds: [
@@ -105,6 +140,20 @@ module.exports = {
       })
     }
 
+    if (member.isCommunicationDisabled()) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "timeout",
+            state: "failed",
+            reason: "User is already timed out",
+            color: COLORS.error
+          })
+        ]
+      })
+    }
+
     try {
       await member.timeout(parsed.ms, reason)
     } catch (err) {
@@ -113,18 +162,16 @@ module.exports = {
 
     const expiresAt = Math.floor((Date.now() + parsed.ms) / 1000)
 
-    await logAction(
+    await logModerationAction({
       guild,
-      logEmbed({
-        punishment: "timeout",
-        user: `<@${member.id}>`,
-        moderator: `<@${interaction.user.id}>`,
-        reason,
-        duration: parsed.label,
-        expiresAt,
-        color: COLORS.warning
-      })
-    )
+      action: "timeout",
+      userId: member.id,
+      moderatorId: interaction.user.id,
+      reason,
+      duration: parsed.label,
+      expiresAt,
+      color: COLORS.warning
+    })
 
     await dmUser(
       guild.id,

@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const {
   SlashCommandBuilder,
   EmbedBuilder,
@@ -17,6 +18,7 @@ const updatesEmbed = require("../../../messages/embeds/updates.embed")
 const PAGE_SIZE = 3
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("info")
     .setDescription("Bot information"),

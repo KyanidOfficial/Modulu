@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const db = require("../../../core/database")
 const embed = require("../../../messages/embeds/punishment.embed")
@@ -5,10 +6,11 @@ const errorEmbed = require("../../../messages/embeds/error.embed")
 const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
-const logAction = require("../../../utils/logAction")
-const logEmbed = require("../../../messages/embeds/log.embed")
+const logModerationAction = require("../../../utils/logModerationAction")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("unwarn")
     .setDescription("Revoke a warning")
@@ -27,13 +29,18 @@ module.exports = {
     const user = interaction.options.getUser("user")
     const warnId = interaction.options.getString("id")
 
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
+    })
+    if (!access.allowed) {
       return interaction.editReply({
         embeds: [errorEmbed({
           users: `<@${interaction.user.id}>`,
           punishment: "unwarn",
           state: "failed",
-          reason: "Missing permissions",
+          reason: access.reason,
           color: COLORS.error
         })]
       })
@@ -68,17 +75,15 @@ module.exports = {
 
     await db.revokeWarning(warnId)
 
-    await logAction(
+    await logModerationAction({
       guild,
-      logEmbed({
-        punishment: "unwarn",
-        user: `<@${user.id}>`,
-        moderator: `<@${interaction.user.id}>`,
-        reason: `Manual removal: ${warnId}`,
-        color: COLORS.success,
-        caseId: warnId
-      })
-    )
+      action: "unwarn",
+      userId: user.id,
+      moderatorId: interaction.user.id,
+      reason: `Manual removal: ${warnId}`,
+      color: COLORS.success,
+      metadata: { warningId: warnId }
+    })
 
     await dmUser(
       guild.id,

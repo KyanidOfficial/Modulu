@@ -12,10 +12,14 @@ const rejectEmbed = require("../../messages/embeds/joinGate.rejected.embed")
 const approveEmbed = require("../../messages/embeds/joinGate.approved.embed")
 const feedbackEmbed = require("../../messages/embeds/feedback.embed")
 const staffTimeButtons = require("./staffTime.buttons")
+const { requireEnabled } = require("../../utils/commandToggle")
 
 const GLOBAL_FEEDBACK_CHANNEL = "1456085711802335353"
 const FEEDBACK_COOLDOWN = 1000 * 60 * 60
 const feedbackCooldowns = new Map()
+
+const isIgnorableInteractionError = err =>
+  err && (err.code === 10062 || err.code === 10008)
 
 module.exports = async (client, interaction) => {
   try {
@@ -230,8 +234,23 @@ module.exports = async (client, interaction) => {
     const command = client.commands.get(interaction.commandName)
     if (!command || typeof command.execute !== "function") return
 
+    const enabled = requireEnabled(command)
+    if (!enabled.ok) {
+      if (!interaction.deferred && !interaction.replied) {
+        await interaction.reply({ content: enabled.reason, ephemeral: true }).catch(() => {})
+      } else {
+        await interaction.editReply({ content: enabled.reason }).catch(() => {})
+      }
+      return
+    }
+
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.deferReply()
+      try {
+        await interaction.deferReply()
+      } catch (err) {
+        if (isIgnorableInteractionError(err)) return
+        throw err
+      }
     }
 
     await command.execute(interaction)
@@ -241,17 +260,38 @@ module.exports = async (client, interaction) => {
     console.error(err)
 
     try {
+      if (!interaction.isRepliable()) return
       if (interaction.replied || interaction.deferred) {
-        await interaction.editReply({
-          embeds: [
-            errorEmbed({
-              users: interaction.user ? `<@${interaction.user.id}>` : "Unknown",
-              punishment: "command",
-              state: "failed",
-              reason: "Internal error"
-            })
-          ]
-        })
+        try {
+          await interaction.editReply({
+            embeds: [
+              errorEmbed({
+                users: interaction.user ? `<@${interaction.user.id}>` : "Unknown",
+                punishment: "command",
+                state: "failed",
+                reason: "Internal error"
+              })
+            ]
+          })
+        } catch (err) {
+          if (!isIgnorableInteractionError(err)) throw err
+        }
+      } else {
+        try {
+          await interaction.reply({
+            embeds: [
+              errorEmbed({
+                users: interaction.user ? `<@${interaction.user.id}>` : "Unknown",
+                punishment: "command",
+                state: "failed",
+                reason: "Internal error"
+              })
+            ],
+            ephemeral: true
+          })
+        } catch (err) {
+          if (!isIgnorableInteractionError(err)) throw err
+        }
       }
     } catch {}
   }

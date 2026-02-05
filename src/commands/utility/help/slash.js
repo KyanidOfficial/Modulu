@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const {
   SlashCommandBuilder,
   EmbedBuilder,
@@ -13,6 +14,7 @@ const PAGE_SIZE = 10
 const MAX_BUTTONS = 5
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("help")
     .setDescription("Open help menu"),

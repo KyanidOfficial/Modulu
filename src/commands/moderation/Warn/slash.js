@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const db = require("../../../core/database")
 const ids = require("../../../utils/ids")
@@ -6,10 +7,11 @@ const errorEmbed = require("../../../messages/embeds/error.embed")
 const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
-const logAction = require("../../../utils/logAction")
-const logEmbed = require("../../../messages/embeds/log.embed")
+const logModerationAction = require("../../../utils/logModerationAction")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("warn")
     .setDescription("Warn a user")
@@ -29,13 +31,18 @@ module.exports = {
     const member = interaction.options.getMember("user")
     const reason = interaction.options.getString("reason") || "No reason provided"
 
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
+    })
+    if (!access.allowed) {
       return interaction.editReply({
         embeds: [errorEmbed({
           users: `<@${interaction.user.id}>`,
           punishment: "warn",
           state: "failed",
-          reason: "Missing permissions",
+          reason: access.reason,
           color: COLORS.error
         })]
       })
@@ -65,17 +72,15 @@ module.exports = {
       createdAt: Date.now()
     })
 
-    await logAction(
+    await logModerationAction({
       guild,
-      logEmbed({
-        punishment: "warn",
-        user: `<@${user.id}>`,
-        moderator: `<@${interaction.user.id}>`,
-        reason,
-        color: COLORS.warning,
-        caseId: warnId
-      })
-    )
+      action: "warn",
+      userId: user.id,
+      moderatorId: interaction.user.id,
+      reason,
+      color: COLORS.warning,
+      metadata: { warningId: warnId }
+    })
 
     await dmUser(
       guild.id,

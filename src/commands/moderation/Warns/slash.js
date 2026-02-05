@@ -1,10 +1,13 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const db = require("../../../core/database")
 const warnsEmbed = require("../../../messages/embeds/warns.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
 const COLORS = require("../../../utils/colors")
+const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("warns")
     .setDescription("View user warnings")
@@ -19,13 +22,18 @@ module.exports = {
     const executor = interaction.member
     const user = interaction.options.getUser("user")
 
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+    const access = await resolveModerationAccess({
+      guildId: guild.id,
+      member: executor,
+      requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
+    })
+    if (!access.allowed) {
       return interaction.editReply({
         embeds: [errorEmbed({
           users: `<@${interaction.user.id}>`,
           punishment: "warns",
           state: "failed",
-          reason: "Missing permissions",
+          reason: access.reason,
           color: COLORS.error
         })]
       })

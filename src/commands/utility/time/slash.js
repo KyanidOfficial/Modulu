@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder } = require("discord.js")
 const staffDb = require("../../../core/database/staffTime")
 const format = require("../../../utils/timeFormat")
@@ -6,6 +7,7 @@ const checkEmbed = require("../../../messages/embeds/time.check.embed")
 const leaderboardEmbed = require("../../../messages/embeds/time.leaderboard.embed")
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("time")
     .setDescription("Staff time commands")

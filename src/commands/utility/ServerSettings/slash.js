@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
 const db = require("../../../core/database")
 const joinGateDb = require("../../../core/database/joinGate")
@@ -5,6 +6,7 @@ const harmfulLinksDb = require("../../../core/database/harmfulLinks")
 const COLORS = require("../../../utils/colors")
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("server")
     .setDescription("Server utilities")

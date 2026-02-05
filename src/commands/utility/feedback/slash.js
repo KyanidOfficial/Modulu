@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = true
 const {
   SlashCommandBuilder,
   ModalBuilder,
@@ -7,6 +8,7 @@ const {
 } = require("discord.js")
 
 module.exports = {
+  COMMAND_ENABLED,
   skipDefer: true,
 
   data: new SlashCommandBuilder()
