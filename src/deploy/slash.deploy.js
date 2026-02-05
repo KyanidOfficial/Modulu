@@ -9,7 +9,6 @@ if (!process.env.CLIENT_ID) throw new Error("Missing CLIENT_ID")
 
 const commands = []
 const names = new Set()
-const errors = []
 const base = path.join(__dirname, "../commands")
 
 const loadCommands = () => {
@@ -35,21 +34,12 @@ const loadCommands = () => {
 
       if (!isCommandEnabled(file)) {
         console.log("Skipped disabled command", file.data.name)
-      if (names.has(file.data.name)) {
-        throw new Error(`Duplicate slash name ${file.data.name}`)
-        errors.push(`Missing data for ${slashPath}`)
-        continue
-      }
-      if (names.has(file.data.name)) {
-        errors.push(`Duplicate slash name ${file.data.name}`)
         continue
       }
 
       names.add(file.data.name)
       commands.push(file.data.toJSON())
       console.log("Prepared", file.data.name)
-    } catch (err) {
-      errors.push(`Failed to prepare ${slashPath}: ${err.message}`)
     }
   }
 }
@@ -59,14 +49,6 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
 ;(async () => {
   try {
     loadCommands()
-    if (errors.length) {
-      console.error("Command preparation failed:")
-      for (const err of errors) {
-        console.error("-", err)
-      }
-      process.exitCode = 1
-      return
-    }
 
     console.log("Deploying", commands.length, "commands")
 
