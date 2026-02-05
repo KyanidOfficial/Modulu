@@ -5,8 +5,7 @@ const errorEmbed = require("../../../messages/embeds/error.embed")
 const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
-const logAction = require("../../../utils/logAction")
-const logEmbed = require("../../../messages/embeds/log.embed")
+const logModerationAction = require("../../../utils/logModerationAction")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -68,17 +67,15 @@ module.exports = {
 
     await db.revokeWarning(warnId)
 
-    await logAction(
+    await logModerationAction({
       guild,
-      logEmbed({
-        punishment: "unwarn",
-        user: `<@${user.id}>`,
-        moderator: `<@${interaction.user.id}>`,
-        reason: `Manual removal: ${warnId}`,
-        color: COLORS.success,
-        caseId: warnId
-      })
-    )
+      action: "unwarn",
+      userId: user.id,
+      moderatorId: interaction.user.id,
+      reason: `Manual removal: ${warnId}`,
+      color: COLORS.success,
+      metadata: { warningId: warnId }
+    })
 
     await dmUser(
       guild.id,

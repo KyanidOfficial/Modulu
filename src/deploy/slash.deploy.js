@@ -10,32 +10,30 @@ const commands = []
 const names = new Set()
 const base = path.join(__dirname, "../commands")
 
-for (const category of fs.readdirSync(base)) {
-  const catPath = path.join(base, category)
-  if (!fs.statSync(catPath).isDirectory()) continue
+const loadCommands = () => {
+  for (const category of fs.readdirSync(base)) {
+    const catPath = path.join(base, category)
+    if (!fs.statSync(catPath).isDirectory()) continue
 
-  for (const folder of fs.readdirSync(catPath)) {
-    const cmdPath = path.join(catPath, folder)
-    if (!fs.statSync(cmdPath).isDirectory()) continue
+    for (const folder of fs.readdirSync(catPath)) {
+      const cmdPath = path.join(catPath, folder)
+      if (!fs.statSync(cmdPath).isDirectory()) continue
 
-    const slashPath = path.join(cmdPath, "slash.js")
-    if (!fs.existsSync(slashPath)) continue
+      const slashPath = path.join(cmdPath, "slash.js")
+      if (!fs.existsSync(slashPath)) continue
 
-    try {
       const file = require(slashPath)
 
-      if (!file.data || !file.data.name) continue
+      if (!file.data || !file.data.name) {
+        throw new Error(`Missing data for ${slashPath}`)
+      }
       if (names.has(file.data.name)) {
-        console.error("Duplicate slash name", file.data.name)
-        continue
+        throw new Error(`Duplicate slash name ${file.data.name}`)
       }
 
       names.add(file.data.name)
       commands.push(file.data.toJSON())
       console.log("Prepared", file.data.name)
-    } catch (err) {
-      console.error("Failed to prepare", slashPath)
-      console.error(err)
     }
   }
 }
@@ -44,6 +42,8 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
 
 ;(async () => {
   try {
+    loadCommands()
+
     console.log("Deploying", commands.length, "commands")
 
     await rest.put(
@@ -55,5 +55,6 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
   } catch (err) {
     console.error("Deploy failed")
     console.error(err)
+    process.exitCode = 1
   }
 })()
