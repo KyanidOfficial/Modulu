@@ -7,12 +7,20 @@ const logModerationAction = require("../../../utils/logModerationAction")
 const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 const applyLockdown = async (channels, enabled) => {
-  const permissions = { SendMessages: !enabled, AddReactions: !enabled, SendMessagesInThreads: !enabled }
+  const permissions = {
+    SendMessages: !enabled,
+    AddReactions: !enabled,
+    SendMessagesInThreads: !enabled
+  }
+
   const failures = []
 
   for (const channel of channels) {
     try {
-      await channel.permissionOverwrites.edit(channel.guild.roles.everyone, permissions)
+      await channel.permissionOverwrites.edit(
+        channel.guild.roles.everyone,
+        permissions
+      )
     } catch {
       failures.push(channel.id)
     }
@@ -37,7 +45,7 @@ module.exports = {
     )
     .addChannelOption(o =>
       o.setName("channel")
-        .setDescription("Specific channel to lock/unlock")
+        .setDescription("Specific channel to lock or unlock")
         .addChannelTypes(ChannelType.GuildText, ChannelType.GuildAnnouncement)
     )
     .addStringOption(o =>
@@ -50,17 +58,18 @@ module.exports = {
     if (!guild) return
 
     const executor = interaction.member
-    const reason = interaction.options.getString("reason") || "No reason provided"
+    const botMember = guild.members.me
     const mode = interaction.options.getString("mode")
     const targetChannel = interaction.options.getChannel("channel")
+    const reason = interaction.options.getString("reason") || "No reason provided"
 
     const access = await resolveModerationAccess({
       guildId: guild.id,
       member: executor,
       requiredDiscordPerms: [PermissionsBitField.Flags.ManageChannels]
     })
+
     if (!access.allowed) {
-    if (!executor.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
       return interaction.editReply({
         embeds: [
           errorEmbed({
@@ -68,14 +77,13 @@ module.exports = {
             punishment: "lockdown",
             state: "failed",
             reason: access.reason,
-            reason: "Missing permissions",
             color: COLORS.error
           })
         ]
       })
     }
 
-    if (!guild.members.me.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
+    if (!botMember.permissions.has(PermissionsBitField.Flags.ManageChannels)) {
       return interaction.editReply({
         embeds: [
           errorEmbed({
@@ -91,9 +99,10 @@ module.exports = {
 
     const channels = targetChannel
       ? [targetChannel]
-      : guild.channels.cache.filter(c =>
-        c.type === ChannelType.GuildText || c.type === ChannelType.GuildAnnouncement
-      ).values()
+      : [...guild.channels.cache.values()].filter(c =>
+          c.type === ChannelType.GuildText ||
+          c.type === ChannelType.GuildAnnouncement
+        )
 
     const enabled = mode === "on"
     const failures = await applyLockdown(channels, enabled)

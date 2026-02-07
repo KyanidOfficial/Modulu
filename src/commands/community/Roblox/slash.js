@@ -1,4 +1,4 @@
-const COMMAND_ENABLED = true
+const COMMAND_ENABLED = false
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const db = require("../../../core/database")
 const systemEmbed = require("../../../messages/embeds/system.embed")

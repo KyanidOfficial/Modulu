@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = false
 const { SlashCommandBuilder } = require("discord.js")
 const appsDb = require("../../../core/database/applications")
 const systemEmbed = require("../../../messages/embeds/system.embed")
@@ -78,6 +79,7 @@ const askQuestion = async (channel, question, index, total) => {
 }
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("apply")
     .setDescription("Submit an application")
@@ -133,6 +135,7 @@ module.exports = {
     const answersMap = {}
     const answersList = []
     const questions = config.questions || []
+
     for (let i = 0; i < questions.length; i += 1) {
       const question = questions[i]
       if (!shouldAsk(question, answersMap)) continue

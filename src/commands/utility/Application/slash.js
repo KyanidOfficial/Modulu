@@ -1,3 +1,4 @@
+const COMMAND_ENABLED = false
 const { SlashCommandBuilder, PermissionsBitField, ChannelType } = require("discord.js")
 const appsDb = require("../../../core/database/applications")
 const systemEmbed = require("../../../messages/embeds/system.embed")
@@ -7,6 +8,7 @@ const COLORS = require("../../../utils/colors")
 const normalizeType = value => value.trim().toLowerCase()
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("application")
     .setDescription("Configure server applications")

@@ -1,39 +1,47 @@
-const dmUser = require("./dmUser")
+const sendDM = require("./dmUser")
 const db = require("../core/database")
 
-module.exports = async (guildId, user, embed) => {
-  if (!guildId || !user || !embed) {
+module.exports = async (guildId, userLike, embed) => {
+  if (!guildId || !userLike || !embed) {
     console.warn("[DM DEBUG] invalid arguments", {
       guildId,
-      user: !!user,
-      embed: !!embed
+      hasUser: !!userLike,
+      hasEmbed: !!embed
     })
     return
   }
 
-  let data
+  const user = userLike.user ?? userLike
+
+  if (!user || !user.id) {
+    console.warn("[DM DEBUG] invalid user object")
+    return
+  }
+
   let enabled = true
+
   try {
-    data = await db.get(guildId)
+    const data = await db.get(guildId)
+    if (data?.setup?.features?.dmOnPunish !== undefined) {
+      enabled = !!data.setup.features.dmOnPunish
+    }
   } catch (err) {
     console.error("[DM DEBUG] db.get failed", err)
   }
 
-  if (data?.setup?.features?.dmOnPunish !== undefined) {
-    enabled = !!data.setup.features.dmOnPunish
+  if (!enabled) {
+    console.log("[DM DEBUG] DM disabled by config", guildId)
+    return
   }
 
-  console.log("[DM DEBUG]", {
-    guildId,
-    dmOnPunish: enabled
-  })
-
-  if (!enabled) return
-
   try {
-    await dmUser(user, embed)
+    await sendDM(user, embed)
     console.log("[DM DEBUG] DM sent", user.id)
-  } catch {
-    console.warn("[DM DEBUG] DM failed", user.id)
+  } catch (err) {
+    console.warn("[DM DEBUG] DM failed", {
+      userId: user.id,
+      code: err?.code,
+      message: err?.message
+    })
   }
 }

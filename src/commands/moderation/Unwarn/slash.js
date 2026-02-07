@@ -27,7 +27,19 @@ module.exports = {
 
     const executor = interaction.member
     const user = interaction.options.getUser("user")
-    const warnId = interaction.options.getString("id")
+    const warnId = Number(interaction.options.getString("id"))
+
+    if (!Number.isSafeInteger(warnId)) {
+      return interaction.editReply({
+        embeds: [errorEmbed({
+          users: `<@${user.id}>`,
+          punishment: "unwarn",
+          state: "failed",
+          reason: "Invalid warning ID format",
+          color: COLORS.error
+        })]
+      })
+    }
 
     const access = await resolveModerationAccess({
       guildId: guild.id,

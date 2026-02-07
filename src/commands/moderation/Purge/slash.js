@@ -8,8 +8,6 @@ const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
   COMMAND_ENABLED,
-
-module.exports = {
   data: new SlashCommandBuilder()
     .setName("purge")
     .setDescription("Mass delete messages from a channel")
@@ -30,6 +28,7 @@ module.exports = {
     if (!guild) return
 
     const executor = interaction.member
+    const botMember = guild.members.me
     const channel = interaction.channel
     const amount = interaction.options.getInteger("amount")
     const user = interaction.options.getUser("user")
@@ -53,8 +52,8 @@ module.exports = {
       member: executor,
       requiredDiscordPerms: [PermissionsBitField.Flags.ManageMessages]
     })
+
     if (!access.allowed) {
-    if (!executor.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
       return interaction.editReply({
         embeds: [
           errorEmbed({
@@ -62,14 +61,13 @@ module.exports = {
             punishment: "purge",
             state: "failed",
             reason: access.reason,
-            reason: "Missing permissions",
             color: COLORS.error
           })
         ]
       })
     }
 
-    if (!guild.members.me.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+    if (!botMember.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
       return interaction.editReply({
         embeds: [
           errorEmbed({
@@ -83,35 +81,8 @@ module.exports = {
       })
     }
 
-    if (!Number.isInteger(amount)) {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: `<@${interaction.user.id}>`,
-            punishment: "purge",
-            state: "failed",
-            reason: "Amount must be a whole number",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
-    if (amount < 1 || amount > 100) {
-      return interaction.editReply({
-        embeds: [
-          errorEmbed({
-            users: `<@${interaction.user.id}>`,
-            punishment: "purge",
-            state: "failed",
-            reason: "Amount must be between 1 and 100",
-            color: COLORS.error
-          })
-        ]
-      })
-    }
-
     let deletedCount = 0
+
     try {
       if (user) {
         const fetched = await channel.messages.fetch({ limit: 100 })
@@ -129,7 +100,7 @@ module.exports = {
             users: `<@${interaction.user.id}>`,
             punishment: "purge",
             state: "failed",
-            reason: "Failed to delete messages (messages older than 14 days cannot be deleted)",
+            reason: "Failed to delete messages. Messages older than 14 days are excluded",
             color: COLORS.error
           })
         ]

@@ -16,8 +16,7 @@ const parseJsonValue = value => {
 const ensureTables = async () => {
   if (tablesReady) return
 
-  await pool.query(
-    `
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS application_configs (
       guild_id VARCHAR(32) NOT NULL,
       type VARCHAR(64) NOT NULL,
@@ -25,11 +24,9 @@ const ensureTables = async () => {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (guild_id, type)
     )
-    `
-  )
+  `)
 
-  await pool.query(
-    `
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS application_submissions (
       id BIGINT AUTO_INCREMENT PRIMARY KEY,
       guild_id VARCHAR(32) NOT NULL,
@@ -39,38 +36,32 @@ const ensureTables = async () => {
       status VARCHAR(32) DEFAULT 'submitted',
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
-    `
-  )
+  `)
 
   tablesReady = true
 }
 
 const getConfig = async (guildId, type) => {
   await ensureTables()
+
   const [rows] = await pool.query(
     "SELECT config_json FROM application_configs WHERE guild_id = ? AND type = ?",
     [guildId, type]
   )
+
   if (!rows.length) return null
-  const parse = typeof parseJsonValue === "function"
-    ? parseJsonValue
-    : value => (typeof value === "string" ? JSON.parse(value) : value)
-  return parse(rows[0].config_json)
+
   return parseJsonValue(rows[0].config_json)
 }
 
 const listConfigs = async guildId => {
   await ensureTables()
+
   const [rows] = await pool.query(
     "SELECT type, config_json FROM application_configs WHERE guild_id = ?",
     [guildId]
   )
-  const parse = typeof parseJsonValue === "function"
-    ? parseJsonValue
-    : value => (typeof value === "string" ? JSON.parse(value) : value)
-  return rows.map(row => ({
-    type: row.type,
-    config: parse(row.config_json)
+
   return rows.map(row => ({
     type: row.type,
     config: parseJsonValue(row.config_json)
@@ -79,6 +70,7 @@ const listConfigs = async guildId => {
 
 const saveConfig = async (guildId, type, config) => {
   await ensureTables()
+
   await pool.query(
     `
     INSERT INTO application_configs (guild_id, type, config_json)
@@ -91,6 +83,7 @@ const saveConfig = async (guildId, type, config) => {
 
 const deleteConfig = async (guildId, type) => {
   await ensureTables()
+
   await pool.query(
     "DELETE FROM application_configs WHERE guild_id = ? AND type = ?",
     [guildId, type]
@@ -99,6 +92,7 @@ const deleteConfig = async (guildId, type) => {
 
 const addSubmission = async ({ guildId, type, userId, answers }) => {
   await ensureTables()
+
   const [result] = await pool.query(
     `
     INSERT INTO application_submissions (guild_id, type, user_id, answers_json)
@@ -106,6 +100,7 @@ const addSubmission = async ({ guildId, type, userId, answers }) => {
     `,
     [guildId, type, userId, JSON.stringify(answers)]
   )
+
   return result.insertId
 }
 

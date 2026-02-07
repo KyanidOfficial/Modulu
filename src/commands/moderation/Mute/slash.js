@@ -11,8 +11,6 @@ const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
   COMMAND_ENABLED,
-
-module.exports = {
   data: new SlashCommandBuilder()
     .setName("mute")
     .setDescription("Manually mute a user using a muted role")
@@ -31,6 +29,7 @@ module.exports = {
     if (!guild) return
 
     const executor = interaction.member
+    const botMember = guild.members.me
     const target = interaction.options.getMember("user")
     const reason = interaction.options.getString("reason") || "No reason provided"
     const sendDM = interaction.options.getBoolean("dm") !== false
@@ -53,13 +52,12 @@ module.exports = {
       member: executor,
       requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
     })
+
     if (!access.allowed) {
       return replyError(access.reason)
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return replyError("Missing permissions")
     }
 
-    if (!guild.members.me.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
+    if (!botMember.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
       return replyError("Bot lacks permissions")
     }
 
@@ -69,7 +67,7 @@ module.exports = {
       return replyError("You cannot mute yourself")
     }
 
-    if (target.id === guild.members.me.id) {
+    if (target.id === botMember.id) {
       return replyError("You cannot mute the bot")
     }
 
@@ -77,7 +75,7 @@ module.exports = {
       return replyError("Role hierarchy issue")
     }
 
-    if (target.roles.highest.position >= guild.members.me.roles.highest.position) {
+    if (target.roles.highest.position >= botMember.roles.highest.position) {
       return replyError("Target role is higher than bot role")
     }
 

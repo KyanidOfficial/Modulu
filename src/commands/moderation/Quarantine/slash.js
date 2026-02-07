@@ -9,10 +9,10 @@ const logModerationAction = require("../../../utils/logModerationAction")
 const ensureRole = require("../../../utils/ensureRole")
 const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
-module.exports = {
-  COMMAND_ENABLED,
+const quarantinedRoles = new Map()
 
 module.exports = {
+  COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("quarantine")
     .setDescription("Place a user in quarantine")
@@ -31,6 +31,7 @@ module.exports = {
     if (!guild) return
 
     const executor = interaction.member
+    const botMember = guild.members.me
     const target = interaction.options.getMember("user")
     const reason = interaction.options.getString("reason") || "No reason provided"
     const sendDM = interaction.options.getBoolean("dm") !== false
@@ -53,31 +54,20 @@ module.exports = {
       member: executor,
       requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
     })
-    if (!access.allowed) {
-      return replyError(access.reason)
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return replyError("Missing permissions")
-    }
 
-    if (!guild.members.me.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
+    if (!access.allowed) return replyError(access.reason)
+
+    if (!botMember.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
       return replyError("Bot lacks permissions")
     }
 
     if (!target) return replyError("Member not found")
 
-    if (target.id === interaction.user.id) {
-      return replyError("You cannot quarantine yourself")
-    }
-
-    if (target.id === guild.members.me.id) {
-      return replyError("You cannot quarantine the bot")
-    }
-
     if (target.roles.highest.position >= executor.roles.highest.position) {
       return replyError("Role hierarchy issue")
     }
 
-    if (target.roles.highest.position >= guild.members.me.roles.highest.position) {
+    if (target.roles.highest.position >= botMember.roles.highest.position) {
       return replyError("Target role is higher than bot role")
     }
 
@@ -86,6 +76,7 @@ module.exports = {
       roleKey: "quarantined",
       roleName: "Quarantined",
       overwrites: {
+        ViewChannel: false,
         SendMessages: false,
         AddReactions: false,
         SendMessagesInThreads: false,
@@ -94,16 +85,31 @@ module.exports = {
       }
     })
 
-    if (!quarantineRole) return replyError("Unable to set up quarantine role")
+    if (!quarantineRole) {
+      return replyError("Unable to set up quarantine role")
+    }
 
     if (target.roles.cache.has(quarantineRole.id)) {
       return replyError("User is already quarantined")
     }
 
+    const key = `${guild.id}:${target.id}`
+
+    const rolesToRemove = target.roles.cache
+      .filter(r => r.id !== guild.id && r.id !== quarantineRole.id)
+      .map(r => r.id)
+
+    quarantinedRoles.set(key, rolesToRemove)
+
     try {
+      if (rolesToRemove.length) {
+        await target.roles.remove(rolesToRemove, "Quarantine")
+      }
+
       await target.roles.add(quarantineRole, reason)
     } catch {
-      return replyError("Failed to apply quarantine role")
+      quarantinedRoles.delete(key)
+      return replyError("Failed to apply quarantine")
     }
 
     await logModerationAction({

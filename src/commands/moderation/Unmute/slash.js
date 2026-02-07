@@ -11,8 +11,6 @@ const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
   COMMAND_ENABLED,
-
-module.exports = {
   data: new SlashCommandBuilder()
     .setName("unmute")
     .setDescription("Remove a manual mute from a user")
@@ -25,6 +23,7 @@ module.exports = {
     if (!guild) return
 
     const executor = interaction.member
+    const botMember = guild.members.me
     const target = interaction.options.getMember("user")
 
     const replyError = text =>
@@ -45,13 +44,12 @@ module.exports = {
       member: executor,
       requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
     })
+
     if (!access.allowed) {
       return replyError(access.reason)
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return replyError("Missing permissions")
     }
 
-    if (!guild.members.me.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
+    if (!botMember.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
       return replyError("Bot lacks permissions")
     }
 

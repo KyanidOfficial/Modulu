@@ -8,11 +8,10 @@ const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
 const ensureRole = require("../../../utils/ensureRole")
 const { resolveModerationAccess } = require("../../../utils/permissionResolver")
+const { quarantinedRoles } = require("../../../utils/quarantineState")
 
 module.exports = {
   COMMAND_ENABLED,
-
-module.exports = {
   data: new SlashCommandBuilder()
     .setName("unquarantine")
     .setDescription("Remove a user from quarantine")
@@ -21,10 +20,16 @@ module.exports = {
     ),
 
   async execute(interaction) {
+    // HARD FIX: guarantee response window
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply()
+    }
+
     const guild = interaction.guild
     if (!guild) return
 
     const executor = interaction.member
+    const botMember = guild.members.me
     const target = interaction.options.getMember("user")
 
     const replyError = text =>
@@ -45,13 +50,10 @@ module.exports = {
       member: executor,
       requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
     })
-    if (!access.allowed) {
-      return replyError(access.reason)
-    if (!executor.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      return replyError("Missing permissions")
-    }
 
-    if (!guild.members.me.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
+    if (!access.allowed) return replyError(access.reason)
+
+    if (!botMember.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
       return replyError("Bot lacks permissions")
     }
 
@@ -69,10 +71,19 @@ module.exports = {
       return replyError("User is not quarantined")
     }
 
+    const key = `${guild.id}:${target.id}`
+    const previousRoles = quarantinedRoles.get(key)
+
     try {
       await target.roles.remove(quarantineRole, "Manual unquarantine")
+
+      if (Array.isArray(previousRoles) && previousRoles.length) {
+        await target.roles.add(previousRoles, "Restore roles after quarantine")
+      }
+
+      quarantinedRoles.delete(key)
     } catch {
-      return replyError("Failed to remove quarantine role")
+      return replyError("Failed to restore user roles")
     }
 
     await logModerationAction({
@@ -84,16 +95,16 @@ module.exports = {
       color: COLORS.success
     })
 
-    await dmUser(
-      guild.id,
-      target.user,
-      dmEmbed({
-        punishment: "unquarantine",
-        reason: "Manual removal",
-        guild: guild.name,
-        color: COLORS.success
-      })
-    )
+    const dm = dmEmbed({
+      punishment: "unquarantine",
+      reason: "Manual removal",
+      guild: guild.name,
+      color: COLORS.success
+    })
+
+    if (dm) {
+      await dmUser(guild.id, target.user, dm)
+    }
 
     return interaction.editReply({
       embeds: [

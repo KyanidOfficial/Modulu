@@ -8,8 +8,6 @@ const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
   COMMAND_ENABLED,
-
-module.exports = {
   data: new SlashCommandBuilder()
     .setName("voicemute")
     .setDescription("Server mute or unmute a user in voice")
@@ -35,6 +33,7 @@ module.exports = {
     if (!guild) return
 
     const executor = interaction.member
+    const botMember = guild.members.me
     const target = interaction.options.getMember("user")
     const mode = interaction.options.getString("mode")
     const reason = interaction.options.getString("reason") || "No reason provided"
@@ -57,13 +56,12 @@ module.exports = {
       member: executor,
       requiredDiscordPerms: [PermissionsBitField.Flags.MuteMembers]
     })
+
     if (!access.allowed) {
       return replyError(access.reason)
-    if (!executor.permissions.has(PermissionsBitField.Flags.MuteMembers)) {
-      return replyError("Missing permissions")
     }
 
-    if (!guild.members.me.permissions.has(PermissionsBitField.Flags.MuteMembers)) {
+    if (!botMember.permissions.has(PermissionsBitField.Flags.MuteMembers)) {
       return replyError("Bot lacks permissions")
     }
 
@@ -74,6 +72,7 @@ module.exports = {
     }
 
     const enabled = mode === "on"
+
     try {
       await target.voice.setMute(enabled, reason)
     } catch {

@@ -1,5 +1,5 @@
 module.exports = {
-  category: "Staff",
+  category: "Utility",
   description: "Clock out from staff duty",
   usage: "clockout",
   example: "clockout",

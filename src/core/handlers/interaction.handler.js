@@ -244,7 +244,7 @@ module.exports = async (client, interaction) => {
       return
     }
 
-    if (!interaction.deferred && !interaction.replied) {
+    if (!command.skipDefer && !interaction.deferred && !interaction.replied) {
       try {
         await interaction.deferReply()
       } catch (err) {

@@ -10,8 +10,6 @@ const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
   COMMAND_ENABLED,
-
-module.exports = {
   data: new SlashCommandBuilder()
     .setName("softban")
     .setDescription("Softban a user (ban and unban to delete messages)")
@@ -49,6 +47,20 @@ module.exports = {
     const deleteDays = interaction.options.getInteger("delete_messages") ?? 1
     const sendDM = interaction.options.getBoolean("dm") !== false
 
+    if (!targetUser) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: "Unknown",
+            punishment: "softban",
+            state: "failed",
+            reason: "User not found",
+            color: COLORS.error
+          })
+        ]
+      })
+    }
+
     const replyError = text =>
       interaction.editReply({
         embeds: [
@@ -67,10 +79,9 @@ module.exports = {
       member: executor,
       requiredDiscordPerms: [PermissionsBitField.Flags.BanMembers]
     })
+
     if (!access.allowed) {
       return replyError(access.reason)
-    if (!executor.permissions.has(PermissionsBitField.Flags.BanMembers)) {
-      return replyError("Missing permissions")
     }
 
     if (!botMember.permissions.has(PermissionsBitField.Flags.BanMembers)) {
@@ -89,8 +100,7 @@ module.exports = {
       return replyError("You cannot softban the server owner")
     }
 
-    const targetMember =
-      await guild.members.fetch(targetUser.id).catch(() => null)
+    const targetMember = await guild.members.fetch(targetUser.id).catch(() => null)
 
     if (targetMember) {
       if (targetMember.roles.highest.position >= executor.roles.highest.position) {
