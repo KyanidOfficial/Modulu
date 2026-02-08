@@ -11,20 +11,27 @@ const log = (message, meta = {}) => {
   console.log(`[APPLICATIONS] ${message}${parts.length ? ` ${parts.join(" ")}` : ""}`)
 }
 
+const isDmBasedChannel = channel =>
+  Boolean(channel && typeof channel.isDMBased === "function" && channel.isDMBased())
+
 module.exports = async (client, message) => {
   if (!message) return
+  if (message.author?.bot) return
+
+  const isDM = isDmBasedChannel(message.channel)
 
   log("messageCreate event firing", {
     userId: message.author?.id || "unknown",
     channelType: message.channel?.type,
-    isDM: Boolean(message.channel?.isDMBased?.())
+    isDM
   })
 
-  if (message.author.bot) return
-
-  // Keep DM routing first so it cannot be gated by guild-only handlers.
-  const consumedByApplicationFlow = await handleApplicationDm(message)
-  if (consumedByApplicationFlow) return
+  // DM routing must happen before guild-only middleware.
+  if (isDM) {
+    const consumedByApplicationFlow = await handleApplicationDm(message)
+    if (consumedByApplicationFlow) return
+    return
+  }
 
   if (!message.content && message.attachments.size === 0) return
 

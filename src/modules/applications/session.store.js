@@ -1,4 +1,3 @@
-// src/modules/applications/session.store.js
 const ACTIVE_TIMEOUT_MS = 1000 * 60 * 10
 const APPLICATION_COOLDOWN_MS = 1000 * 60 * 10
 const START_SPAM_WINDOW_MS = 1000 * 30

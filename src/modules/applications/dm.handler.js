@@ -1,4 +1,3 @@
-// src/modules/applications/dm.handler.js
 const db = require("../../core/database/applications")
 const systemEmbed = require("../../messages/embeds/system.embed")
 const applicationSubmittedEmbed = require("../../messages/embeds/application.submitted.embed")
@@ -25,6 +24,9 @@ const log = (message, meta = {}) => {
 
 const sanitizeText = text => (text || "").trim()
 
+const isDmBasedChannel = channel =>
+  Boolean(channel && typeof channel.isDMBased === "function" && channel.isDMBased())
+
 const questionEmbed = session => {
   const question = session.questions[session.index]
   const requiredLabel = question.required === false ? "Optional" : "Required"
@@ -45,9 +47,10 @@ const editOrSendQuestion = async session => {
 
   if (session.questionMessageId) {
     try {
-      const existing = await session.dm.messages.fetch(session.questionMessageId)
-      const edited = await existing.edit({ embeds: [embed] })
-      log("Question embed edited", {
+      const edited = await session.dm.messages.edit(session.questionMessageId, {
+        embeds: [embed]
+      })
+      log("Edit embed success", {
         userId: session.userId,
         sessionId: session.submissionId,
         messageId: edited.id,
@@ -55,7 +58,7 @@ const editOrSendQuestion = async session => {
       })
       return edited
     } catch (error) {
-      log("Question edit failed, fallback send", {
+      log("Edit embed failed fallback used", {
         userId: session.userId,
         sessionId: session.submissionId,
         reason: error?.message || "unknown"
@@ -65,11 +68,11 @@ const editOrSendQuestion = async session => {
 
   const sent = await session.dm.send({ embeds: [embed] })
   setQuestionMessageRef({ userId: session.userId, channelId: session.dm.id, messageId: sent.id })
-  log("Question embed sent", {
+  log("Edit embed failed fallback used", {
     userId: session.userId,
     sessionId: session.submissionId,
     messageId: sent.id,
-    index: session.index
+    fallback: "send"
   })
   return sent
 }
@@ -77,16 +80,15 @@ const editOrSendQuestion = async session => {
 const editOrSendTerminal = async (session, embed, actionName) => {
   if (session?.questionMessageId) {
     try {
-      const msg = await session.dm.messages.fetch(session.questionMessageId)
-      await msg.edit({ embeds: [embed] })
+      const msg = await session.dm.messages.edit(session.questionMessageId, { embeds: [embed] })
       log(`${actionName} embed edited`, {
         userId: session.userId,
         sessionId: session.submissionId,
-        messageId: session.questionMessageId
+        messageId: msg.id
       })
       return
     } catch (error) {
-      log(`${actionName} edit failed, fallback send`, {
+      log(`${actionName} edit failed fallback used`, {
         userId: session.userId,
         sessionId: session.submissionId,
         reason: error?.message || "unknown"
@@ -94,7 +96,10 @@ const editOrSendTerminal = async (session, embed, actionName) => {
     }
   }
 
-  await session.dm.send({ embeds: [embed] }).catch(() => {})
+  const sent = await session.dm.send({ embeds: [embed] }).catch(() => null)
+  if (sent) {
+    setQuestionMessageRef({ userId: session.userId, channelId: session.dm.id, messageId: sent.id })
+  }
 }
 
 const persistDraft = async session => {
@@ -121,36 +126,39 @@ const persistDraft = async session => {
 }
 
 module.exports = async message => {
+  const isDM = isDmBasedChannel(message.channel)
+
   log("messageCreate observed", {
     userId: message.author?.id || "unknown",
     channelType: message.channel?.type,
-    isDM: Boolean(message.channel?.isDMBased?.())
+    isDM
   })
 
   if (message.author?.bot) return false
-  if (!message.channel?.isDMBased?.()) return false
+  if (!isDM) return false
 
-  log("DM message detected", {
+  log("DM detected", {
     userId: message.author.id,
-    channelId: message.channel.id,
-    length: (message.content || "").length,
-    channelType: message.channel.type
+    channelType: message.channel?.type,
+    isDM
   })
 
   const session = getSession(message.author.id)
-  log("Session lookup", {
-    userId: message.author.id,
-    found: Boolean(session)
-  })
-
   if (!session) {
-    log("No active session", { userId: message.author.id })
+    log("No active session for user", { userId: message.author.id })
     return false
   }
+
+  log("Session found", {
+    userId: message.author.id,
+    sessionId: session.submissionId,
+    index: session.index
+  })
 
   if (session.dmChannelId && session.dmChannelId !== message.channel.id) {
     log("DM channel mismatch", {
       userId: message.author.id,
+      sessionId: session.submissionId,
       expected: session.dmChannelId,
       got: message.channel.id
     })
@@ -198,7 +206,7 @@ module.exports = async message => {
         await editOrSendTerminal(closed, cancelEmbed, "Cancel")
       }
 
-      log("Session canceled", {
+      log("Session cleared", {
         userId: message.author.id,
         sessionId: session.submissionId
       })
@@ -231,13 +239,6 @@ module.exports = async message => {
       return true
     }
 
-    log("DM received", {
-      userId: message.author.id,
-      sessionId: session.submissionId,
-      index: session.index,
-      length: content.length
-    })
-
     const beforeIndex = session.index
     const updated = saveAnswer({ userId: message.author.id, answer: content })
 
@@ -253,18 +254,19 @@ module.exports = async message => {
       }).catch(() => {})
 
       cancelSession(message.author.id)
-      log("Session canceled due to sync error", {
+      log("Session cleared", {
         userId: message.author.id,
-        sessionId: session.submissionId
+        sessionId: session.submissionId,
+        reason: "sync_error"
       })
       return true
     }
 
-    log("Answer saved", {
+    log("Answer accepted", {
       userId: message.author.id,
       sessionId: updated.submissionId,
-      beforeIndex,
-      afterIndex: updated.index
+      index: beforeIndex,
+      length: content.length
     })
 
     await persistDraft(updated)
