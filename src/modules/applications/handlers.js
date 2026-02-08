@@ -32,6 +32,7 @@ const safeReply = async (interaction, payload) => {
 }
 
 const replySystem = (interaction, { title, description, color = COLORS.info, components = [] }) =>
+const replySystem = (interaction, { title, description, color = COLORS.info }) =>
   safeReply(interaction, {
     embeds: [
       systemEmbed({
@@ -212,6 +213,7 @@ module.exports = async interaction => {
         const status = a.config?.state || "unknown"
         const count = Array.isArray(a.config?.questions) ? a.config.questions.length : 0
         return `- **${a.type}** (${status}) — ${count} question(s)`
+        return `- **${a.type}** (${status})`
       })
       .join("\n")
 
@@ -258,6 +260,7 @@ module.exports = async interaction => {
   }
 
   if (interaction.customId === "apps:questions:manage") {
+  if (interaction.customId === "apps:questions:add") {
     let type
 
     try {
@@ -278,6 +281,15 @@ module.exports = async interaction => {
       await replySystem(interaction, {
         title: "Invalid input",
         description: "Question key is required.",
+        color: COLORS.error
+      })
+      return
+    }
+
+    if (!prompt) {
+      await replySystem(interaction, {
+        title: "Invalid input",
+        description: "Question prompt is required.",
         color: COLORS.error
       })
       return
@@ -338,6 +350,12 @@ module.exports = async interaction => {
         title: "Question updated",
         description: `Updated question **${key}**.`,
         color: COLORS.success
+    const questions = Array.isArray(config.questions) ? config.questions : []
+    if (questions.some(q => normalize(q.key || "") === key)) {
+      await replySystem(interaction, {
+        title: "Duplicate key",
+        description: "Question key already exists.",
+        color: COLORS.warning
       })
       return
     }
@@ -641,6 +659,9 @@ module.exports = async interaction => {
     return
   }
 
+  /* ===============================
+     FALLBACK (SAFETY)
+     =============================== */
   await replySystem(interaction, {
     title: "Unknown action",
     description: "This action is not implemented.",

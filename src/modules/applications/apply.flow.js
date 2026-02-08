@@ -84,6 +84,11 @@ module.exports = async interaction => {
 
   if (!startCheck.ok) {
     await interaction.editReply({
+  const answers = []
+  const questions = Array.isArray(config.questions) ? config.questions : []
+
+  for (const question of questions) {
+    await dm.send({
       embeds: [
         systemEmbed({
           title: "Cannot start application",
