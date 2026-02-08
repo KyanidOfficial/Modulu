@@ -31,7 +31,12 @@ module.exports = {
 
           new ButtonBuilder()
             .setCustomId("apps:questions")
-            .setLabel("Questions")
+            .setLabel("Questions +/-")
+            .setStyle(ButtonStyle.Secondary),
+
+          new ButtonBuilder()
+            .setCustomId("apps:view")
+            .setLabel("View Applications")
             .setStyle(ButtonStyle.Secondary),
 
           new ButtonBuilder()
