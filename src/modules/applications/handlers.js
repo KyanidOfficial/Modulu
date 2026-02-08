@@ -632,6 +632,9 @@ module.exports = async interaction => {
     return
   }
 
+  /* ===============================
+     FALLBACK (SAFETY)
+     =============================== */
   await replySystem(interaction, {
     title: "Unknown action",
     description: "This action is not implemented.",
