@@ -1,3 +1,4 @@
+// src/modules/applications/apply.flow.js
 const db = require("../../core/database/applications")
 const systemEmbed = require("../../messages/embeds/system.embed")
 const COLORS = require("../../utils/colors")

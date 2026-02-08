@@ -1,3 +1,4 @@
+// src/events/messageCreate.event.js
 const prefixHandler = require("../core/handlers/prefix.handler")
 const harmfulLinks = require("./messages/harmfulLinks")
 const sbDebug = require("./messages/sbDebug")
