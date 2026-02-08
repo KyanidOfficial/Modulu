@@ -611,6 +611,26 @@ module.exports = async interaction => {
     return
   }
 
+  if (interaction.customId === "apps:submissions:delete-all:modal") {
+    const confirmation = normalize(parseModalValue(interaction, "confirmation"))
+    if (confirmation !== "delete all") {
+      await replySystem(interaction, {
+        title: "Confirmation required",
+        description: "Type `delete all` to confirm deleting all submissions.",
+        color: COLORS.warning
+      })
+      return
+    }
+
+    const deletedCount = await service.deleteAllSubmissions(interaction.guild.id)
+    await replySystem(interaction, {
+      title: "Submissions deleted",
+      description: deletedCount ? `Deleted **${deletedCount}** submissions.` : "No submissions were found to delete.",
+      color: COLORS.success
+    })
+    return
+  }
+
   // BUTTONS & SELECTS
   if (interaction.customId === "apps:create") {
     const modal = new ModalBuilder().setCustomId("apps:create:modal").setTitle("Create Application Type")
@@ -899,6 +919,23 @@ module.exports = async interaction => {
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder().setCustomId("type").setLabel("Application type to delete").setStyle(TextInputStyle.Short).setRequired(true)
+      )
+    )
+
+    await showModalOrError(interaction, modal)
+    return
+  }
+
+  if (interaction.customId === "apps:submissions:delete-all") {
+    const modal = new ModalBuilder().setCustomId("apps:submissions:delete-all:modal").setTitle("Delete All Submissions")
+    modal.addComponents(
+      new ActionRowBuilder().addComponents(
+        new TextInputBuilder()
+          .setCustomId("confirmation")
+          .setLabel("Type delete all to confirm")
+          .setPlaceholder("delete all")
+          .setStyle(TextInputStyle.Short)
+          .setRequired(true)
       )
     )
 

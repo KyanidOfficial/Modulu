@@ -52,6 +52,10 @@ module.exports = {
     return db.getSubmission(guildId, submissionId)
   },
 
+  async deleteAllSubmissions(guildId) {
+    return db.deleteAllSubmissions(guildId)
+  },
+
   async addStaffNote({ guildId, submissionId, reviewerId, note }) {
     const submission = await db.getSubmission(guildId, submissionId)
     if (!submission || !submission.payload) return false
