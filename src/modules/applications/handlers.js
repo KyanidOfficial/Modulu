@@ -21,6 +21,7 @@ const {
 const systemEmbed = require("../../messages/embeds/system.embed")
 const COLORS = require("../../utils/colors")
 const { normalize, validateType, validateDescription } = require("./validators")
+const { escapeMarkdownSafe } = require("../../utils/safeText")
 
 const APP_STATUS_LABELS = {
   pending: "Pending",
@@ -82,28 +83,38 @@ const buildQuestionEditorComponents = (type, questions) => [
   )
 ]
 
+const safe = value => escapeMarkdownSafe(value)
+
 const buildSubmissionEmbed = submission => {
   const payload = submission.payload || {}
   const questions = Array.isArray(payload.questions) ? payload.questions : []
   const embed = systemEmbed({
     title: `Submission #${submission.id}`,
     description:
-      `Applicant: **${payload.applicant?.username || submission.userId}** (${submission.userId})\n` +
-      `Type: **${submission.type || payload.type || "unknown"}**\n` +
+      `Applicant: **${safe(payload.applicant?.username || submission.userId)}** (${submission.userId})\n` +
+      `Type: **${safe(submission.type || payload.type || "unknown")}**\n` +
       `Status: **${APP_STATUS_LABELS[submission.status] || submission.status || "pending"}**\n` +
       `Submitted: **${payload.submittedAt || "In progress"}**`,
     color: COLORS.info
   })
 
   for (const item of questions.slice(0, 20)) {
-    embed.addFields({ name: item.prompt || "Question", value: item.answer || "No response", inline: false })
+    embed.addFields({
+      name: safe(item.prompt || "Question"),
+      value: safe(item.answer || "No response"),
+      inline: false
+    })
   }
 
   const notes = Array.isArray(payload.staffNotes) ? payload.staffNotes : []
   if (notes.length) {
     embed.addFields({
       name: "Staff Notes",
-      value: notes.slice(-5).map(note => `• <@${note.reviewerId}>: ${note.note}`).join("\n").slice(0, 1024),
+      value: notes
+        .slice(-5)
+        .map(note => `• <@${note.reviewerId}>: ${safe(note.note)}`)
+        .join("\n")
+        .slice(0, 1024),
       inline: false
     })
   }
@@ -145,14 +156,14 @@ const renderSubmissionList = async (interaction, page = 0) => {
 
   const description = currentItems
     .slice(0, 10)
-    .map(s => `• ${s.payload?.applicant?.username || s.userId} — ${APP_STATUS_LABELS[s.status] || s.status} — ${s.payload?.submittedAt || "In progress"}`)
+    .map(s => `• ${safe(s.payload?.applicant?.username || s.userId)} — ${APP_STATUS_LABELS[s.status] || s.status} — ${safe(s.payload?.submittedAt || "In progress")}`)
     .join("\n")
 
   const components = []
 
   const options = currentItems.slice(0, 25).map(s => ({
-    label: (s.payload?.applicant?.username || `User ${s.userId}`).slice(0, 100),
-    description: `${s.type || "unknown"} • ${APP_STATUS_LABELS[s.status] || s.status}`.slice(0, 100),
+    label: safe(s.payload?.applicant?.username || `User ${s.userId}`).slice(0, 100),
+    description: safe(`${s.type || "unknown"} • ${APP_STATUS_LABELS[s.status] || s.status}`).slice(0, 100),
     value: String(s.id)
   }))
 
@@ -524,6 +535,7 @@ module.exports = async interaction => {
     const [, , , action, submissionIdRaw] = interaction.customId.split(":")
     const submissionId = Number(submissionIdRaw)
     const reason = parseModalValue(interaction, "reason").trim() || "No reason provided"
+    const safeReason = safe(reason)
     const status = action === "approve" ? "approved" : "denied"
 
     const updated = await service.decideSubmission({
@@ -544,7 +556,7 @@ module.exports = async interaction => {
         embeds: [
           systemEmbed({
             title: `Application ${APP_STATUS_LABELS[status]}`,
-            description: `Your **${updated.type}** application in **${interaction.guild.name}** was **${status}**.\nReason: ${reason}`,
+            description: `Your **${safe(updated.type)}** application in **${safe(interaction.guild.name)}** was **${status}**.\nReason: ${safeReason}`,
             color: status === "approved" ? COLORS.success : COLORS.error
           })
         ]
@@ -617,7 +629,7 @@ module.exports = async interaction => {
       return
     }
 
-    const description = list.map(a => `- **${a.type}** (${a.config?.state || "unknown"})`).join("\n")
+    const description = list.map(a => `- **${safe(a.type)}** (${safe(a.config?.state || "unknown")})`).join("\n")
     await replySystem(interaction, { title: "Application types", description, color: COLORS.info })
     return
   }
@@ -654,7 +666,7 @@ module.exports = async interaction => {
     const description = filtered
       .map(item => {
         const qCount = Array.isArray(item.config?.questions) ? item.config.questions.length : 0
-        return `• **${item.type}** — creator: <@${item.config?.creatorId || "unknown"}> — ${item.config?.state || "unknown"} — ${qCount} question(s) — created ${item.config?.createdAt || "unknown"}`
+        return `• **${safe(item.type)}** — creator: <@${item.config?.creatorId || "unknown"}> — ${safe(item.config?.state || "unknown")} — ${qCount} question(s) — created ${safe(item.config?.createdAt || "unknown")}`
       })
       .join("\n")
       .slice(0, 3900)
@@ -702,7 +714,7 @@ module.exports = async interaction => {
     }
 
     const options = list.slice(0, 25).map(item => ({
-      label: item.type.slice(0, 100),
+      label: safe(item.type).slice(0, 100),
       description: `${Array.isArray(item.config?.questions) ? item.config.questions.length : 0} question(s)`.slice(0, 100),
       value: item.type
     }))
@@ -764,7 +776,7 @@ module.exports = async interaction => {
       return
     }
 
-    const options = questions.slice(0, 25).map((q, i) => ({ label: `#${i + 1} ${q.prompt}`.slice(0, 100), value: String(i) }))
+    const options = questions.slice(0, 25).map((q, i) => ({ label: safe(`#${i + 1} ${q.prompt}`).slice(0, 100), value: String(i) }))
     await replySystem(interaction, {
       title: `Edit question: ${type}`,
       description: "Pick a question.",
@@ -802,7 +814,7 @@ module.exports = async interaction => {
       return
     }
 
-    const options = questions.slice(0, 25).map((q, i) => ({ label: `#${i + 1} ${q.prompt}`.slice(0, 100), value: String(i) }))
+    const options = questions.slice(0, 25).map((q, i) => ({ label: safe(`#${i + 1} ${q.prompt}`).slice(0, 100), value: String(i) }))
     await replySystem(interaction, {
       title: `Remove question: ${type}`,
       description: "Pick a question.",
