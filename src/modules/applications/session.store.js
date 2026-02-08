@@ -47,9 +47,7 @@ const setCooldown = ({ userId, guildId, type }) => {
 }
 
 const clearSessionTimeout = session => {
-  if (session?.timeout) {
-    clearTimeout(session.timeout)
-  }
+  if (session?.timeout) clearTimeout(session.timeout)
 }
 
 const scheduleTimeout = (userId, onTimeout) => {
@@ -72,7 +70,9 @@ const startSession = ({ userId, session, onTimeout }) => {
     startedAt: Date.now(),
     answers: [],
     index: 0,
-    timeout: null
+    timeout: null,
+    processing: false,
+    onTimeout
   })
 
   scheduleTimeout(userId, onTimeout)
@@ -81,8 +81,24 @@ const startSession = ({ userId, session, onTimeout }) => {
 
 const getSession = userId => activeSessions.get(userId)
 
-const touchSession = (userId, onTimeout) => {
-  scheduleTimeout(userId, onTimeout)
+const touchSession = userId => {
+  const session = activeSessions.get(userId)
+  if (!session || typeof session.onTimeout !== "function") return
+  scheduleTimeout(userId, session.onTimeout)
+}
+
+const beginProcessing = userId => {
+  const session = activeSessions.get(userId)
+  if (!session) return false
+  if (session.processing) return false
+  session.processing = true
+  return true
+}
+
+const endProcessing = userId => {
+  const session = activeSessions.get(userId)
+  if (!session) return
+  session.processing = false
 }
 
 const saveAnswer = ({ userId, answer }) => {
@@ -95,6 +111,8 @@ const saveAnswer = ({ userId, answer }) => {
   session.answers.push({
     key: question.key,
     prompt: question.prompt,
+    required: question.required !== false,
+    kind: question.kind || "paragraph",
     answer,
     answeredAt: new Date().toISOString()
   })
@@ -112,10 +130,7 @@ const cancelSession = userId => {
   return session
 }
 
-const completeSession = userId => {
-  const session = cancelSession(userId)
-  return session
-}
+const completeSession = userId => cancelSession(userId)
 
 module.exports = {
   canStartApplication,
@@ -123,6 +138,8 @@ module.exports = {
   startSession,
   getSession,
   touchSession,
+  beginProcessing,
+  endProcessing,
   saveAnswer,
   cancelSession,
   completeSession

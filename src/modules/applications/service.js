@@ -8,13 +8,15 @@ const normalizeStatus = status => {
 }
 
 module.exports = {
-  async createConfig({ guildId, type, description }) {
+  async createConfig({ guildId, type, description, creatorId }) {
     const normalizedType = validateType(type)
     const safeDescription = validateDescription(description)
 
     const config = {
       type: normalizedType,
       description: safeDescription,
+      creatorId,
+      createdAt: new Date().toISOString(),
       questions: [],
       state: "open"
     }

@@ -1,32 +1,24 @@
 const db = require("../../core/database/applications")
 const systemEmbed = require("../../messages/embeds/system.embed")
 const COLORS = require("../../utils/colors")
-const {
-  canStartApplication,
-  startSession,
-  cancelSession
-} = require("./session.store")
-
-const buildQuestionEmbed = ({ question, index, total, type }) =>
-  systemEmbed({
-    title: `Application: ${type}`,
-    description:
-      `Question ${index + 1} of ${total}\n\n${question.prompt}\n\n` +
-      "Reply in this DM to continue. Type `cancel` to stop.",
-    color: COLORS.info
-  })
+const { canStartApplication, startSession, cancelSession } = require("./session.store")
 
 const sendQuestion = async session => {
   const question = session.questions[session.index]
   if (!question) return
 
+  const requiredLabel = question.required === false ? "Optional" : "Required"
+  const answerLabel = question.kind === "short" ? "short answer" : "detailed answer"
+
   await session.dm.send({
     embeds: [
-      buildQuestionEmbed({
-        question,
-        index: session.index,
-        total: session.questions.length,
-        type: session.type
+      systemEmbed({
+        title: `Application: ${session.type}`,
+        description:
+          `Question ${session.index + 1} of ${session.questions.length}\n` +
+          `(${requiredLabel}, ${answerLabel})\n\n${question.prompt}\n\n` +
+          "Reply in this DM to continue. Type `cancel` to stop.",
+        color: COLORS.info
       })
     ]
   })
@@ -109,6 +101,30 @@ module.exports = async interaction => {
     return
   }
 
+  const submissionId = await db.createSubmission({
+    guildId: interaction.guild.id,
+    type,
+    userId: interaction.user.id,
+    answers: {
+      applicant: {
+        id: interaction.user.id,
+        username: interaction.user.username,
+        tag: interaction.user.tag
+      },
+      guild: {
+        id: interaction.guild.id,
+        name: interaction.guild.name
+      },
+      type,
+      startedAt: new Date().toISOString(),
+      submittedAt: null,
+      questions: [],
+      staffNotes: [],
+      decision: null
+    },
+    status: "pending"
+  })
+
   const session = startSession({
     userId: interaction.user.id,
     session: {
@@ -118,26 +134,28 @@ module.exports = async interaction => {
       guildId: interaction.guild.id,
       guildName: interaction.guild.name,
       type,
-      config,
       questions,
-      dm
+      dm,
+      submissionId
     },
     onTimeout: async expiredSession => {
+      await db.deleteSubmission(expiredSession.guildId, expiredSession.submissionId).catch(() => {})
       await expiredSession.dm.send({
         embeds: [
           systemEmbed({
             title: "Application timed out",
-            description: "No response received in time. Start /apply again when ready.",
+            description: "No response received in time. The draft was cancelled. Start /apply again when ready.",
             color: COLORS.warning
           })
         ]
-      })
+      }).catch(() => {})
     }
   })
 
   const sent = await sendQuestion(session).then(() => true).catch(() => false)
   if (!sent) {
     cancelSession(interaction.user.id)
+    await db.deleteSubmission(interaction.guild.id, submissionId).catch(() => {})
     await interaction.editReply({
       embeds: [
         systemEmbed({

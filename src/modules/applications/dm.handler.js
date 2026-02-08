@@ -5,6 +5,8 @@ const COLORS = require("../../utils/colors")
 const {
   getSession,
   touchSession,
+  beginProcessing,
+  endProcessing,
   saveAnswer,
   completeSession,
   cancelSession,
@@ -12,37 +14,24 @@ const {
 } = require("./session.store")
 
 const MIN_REPLY_LENGTH = 2
+const MAX_REPLY_LENGTH = 1200
 
-const sanitizeText = text => text.trim()
+const sanitizeText = text => (text || "").trim()
 
-const buildSubmissionPayload = session => ({
-  applicant: {
-    id: session.userId,
-    username: session.username,
-    tag: session.userTag
-  },
-  guild: {
-    id: session.guildId,
-    name: session.guildName
-  },
-  type: session.type,
-  startedAt: new Date(session.startedAt).toISOString(),
-  submittedAt: new Date().toISOString(),
-  questions: session.answers,
-  staffNotes: [],
-  decision: null
-})
-
-const sendNextQuestion = async session => {
+const sendQuestion = async session => {
   const question = session.questions[session.index]
   if (!question) return false
+
+  const requiredLabel = question.required === false ? "Optional" : "Required"
+  const answerLabel = question.kind === "short" ? "short answer" : "detailed answer"
 
   await session.dm.send({
     embeds: [
       systemEmbed({
         title: `Application: ${session.type}`,
         description:
-          `Question ${session.index + 1} of ${session.questions.length}\n\n${question.prompt}\n\n` +
+          `Question ${session.index + 1} of ${session.questions.length}\n` +
+          `(${requiredLabel}, ${answerLabel})\n\n${question.prompt}\n\n` +
           "Reply in this DM to continue. Type `cancel` to stop.",
         color: COLORS.info
       })
@@ -52,23 +41,68 @@ const sendNextQuestion = async session => {
   return true
 }
 
+const persistDraft = async session => {
+  await db.saveSubmission(session.guildId, session.submissionId, {
+    status: "pending",
+    payload: {
+      applicant: {
+        id: session.userId,
+        username: session.username,
+        tag: session.userTag
+      },
+      guild: {
+        id: session.guildId,
+        name: session.guildName
+      },
+      type: session.type,
+      startedAt: new Date(session.startedAt).toISOString(),
+      submittedAt: null,
+      questions: session.answers,
+      staffNotes: [],
+      decision: null
+    }
+  })
+}
+
 module.exports = async message => {
-  if (!message.inGuild() && message.channel?.isDMBased?.()) {
-    const session = getSession(message.author.id)
-    if (!session) return false
+  if (message.author?.bot) return false
+  if (!message.channel?.isDMBased?.()) return false
 
-    if (session.dm.id !== message.channel.id) return false
+  const session = getSession(message.author.id)
+  if (!session) return false
 
-    const content = sanitizeText(message.content || "")
-    if (!content) return true
+  if (session.dm.id !== message.channel.id) return false
+
+  if (!beginProcessing(message.author.id)) {
+    return true
+  }
+
+  try {
+    const content = sanitizeText(message.content)
+
+    if (!content) {
+      await message.channel.send({
+        embeds: [
+          systemEmbed({
+            title: "Empty answer",
+            description: "Please send a message with your answer, or type `cancel`.",
+            color: COLORS.warning
+          })
+        ]
+      }).catch(() => {})
+      return true
+    }
 
     if (content.toLowerCase() === "cancel") {
-      cancelSession(message.author.id)
+      const closed = cancelSession(message.author.id)
+      if (closed) {
+        await db.deleteSubmission(closed.guildId, closed.submissionId).catch(() => {})
+      }
       await message.channel.send({
         embeds: [
           systemEmbed({
             title: "Application canceled",
-            description: "Your application flow has been canceled.",
+            description: "Your application session has been canceled and cleaned up.",
             color: COLORS.warning
           })
         ]
@@ -81,7 +115,20 @@ module.exports = async message => {
         embeds: [
           systemEmbed({
             title: "Answer too short",
-            description: "Please provide a more complete answer.",
+            description: "Please provide at least 2 characters.",
+            color: COLORS.warning
+          })
+        ]
+      }).catch(() => {})
+      return true
+    }
+
+    if (content.length > MAX_REPLY_LENGTH) {
+      await message.channel.send({
+        embeds: [
+          systemEmbed({
+            title: "Answer too long",
+            description: "Please keep answers under 1200 characters.",
             color: COLORS.warning
           })
         ]
@@ -94,25 +141,31 @@ module.exports = async message => {
       answer: content
     })
 
-    if (!updated) return true
-
-    touchSession(message.author.id, async expiredSession => {
-      await expiredSession.dm.send({
+    if (!updated) {
+      await message.channel.send({
         embeds: [
           systemEmbed({
-            title: "Application timed out",
-            description: "No response received in time. Start /apply again when ready.",
-            color: COLORS.warning
+            title: "Session error",
+            description: "Your session is out of sync. Please run /apply again.",
+            color: COLORS.error
           })
         ]
-      })
-    })
+      }).catch(() => {})
+      cancelSession(message.author.id)
+      return true
+    }
+
+    await persistDraft(updated)
+    touchSession(message.author.id)
 
     const hasMoreQuestions = updated.index < updated.questions.length
     if (hasMoreQuestions) {
-      const sent = await sendNextQuestion(updated).then(() => true).catch(() => false)
+      const sent = await sendQuestion(updated).then(() => true).catch(() => false)
       if (!sent) {
-        cancelSession(message.author.id)
+        const closed = cancelSession(message.author.id)
+        if (closed) {
+          await db.deleteSubmission(closed.guildId, closed.submissionId).catch(() => {})
+        }
       }
       return true
     }
@@ -120,14 +173,27 @@ module.exports = async message => {
     const completed = completeSession(message.author.id)
     if (!completed) return true
 
-    const payload = buildSubmissionPayload(completed)
-
-    const submissionId = await db.createSubmission({
-      guildId: completed.guildId,
+    const payload = {
+      applicant: {
+        id: completed.userId,
+        username: completed.username,
+        tag: completed.userTag
+      },
+      guild: {
+        id: completed.guildId,
+        name: completed.guildName
+      },
       type: completed.type,
-      userId: completed.userId,
-      answers: payload,
-      status: "pending"
+      startedAt: new Date(completed.startedAt).toISOString(),
+      submittedAt: new Date().toISOString(),
+      questions: completed.answers,
+      staffNotes: [],
+      decision: null
+    }
+
+    await db.saveSubmission(completed.guildId, completed.submissionId, {
+      status: "pending",
+      payload
     })
 
     setCooldown({
@@ -141,13 +207,13 @@ module.exports = async message => {
         applicationSubmittedEmbed({
           type: completed.type,
           guild: completed.guildName,
-          submissionId
+          submissionId: completed.submissionId
         })
       ]
     }).catch(() => {})
 
     return true
+  } finally {
+    endProcessing(message.author.id)
   }
-
-  return false
 }

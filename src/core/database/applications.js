@@ -9,7 +9,7 @@ const pool = mysql.createPool({
   connectionLimit: 5
 })
 
-const parseConfigJson = raw => {
+const parseJson = raw => {
   if (!raw) return null
   if (typeof raw === "object") return raw
 
@@ -19,8 +19,6 @@ const parseConfigJson = raw => {
     return null
   }
 }
-
-const parseSubmissionJson = parseConfigJson
 
 module.exports = {
   async getAllConfigs(guildId) {
@@ -32,7 +30,7 @@ module.exports = {
     return rows
       .map(row => ({
         type: row.type,
-        config: parseConfigJson(row.config_json)
+        config: parseJson(row.config_json)
       }))
       .filter(row => row.config)
   },
@@ -44,7 +42,7 @@ module.exports = {
     )
 
     if (!rows.length) return null
-    return parseConfigJson(rows[0].config_json)
+    return parseJson(rows[0].config_json)
   },
 
   async saveConfig(guildId, type, config) {
@@ -80,6 +78,15 @@ module.exports = {
     return result.insertId
   },
 
+  async deleteSubmission(guildId, submissionId) {
+    const [result] = await pool.query(
+      "DELETE FROM application_submissions WHERE guild_id = ? AND id = ?",
+      [guildId, submissionId]
+    )
+
+    return result.affectedRows > 0
+  },
+
   async listSubmissions(guildId) {
     const [rows] = await pool.query(
       `
@@ -87,18 +94,20 @@ module.exports = {
       FROM application_submissions
       WHERE guild_id = ?
       ORDER BY id DESC
-      LIMIT 25
+      LIMIT 50
       `,
       [guildId]
     )
 
-    return rows.map(row => ({
-      id: row.id,
-      userId: row.user_id,
-      type: row.type,
-      status: row.status,
-      payload: parseSubmissionJson(row.answers_json)
-    }))
+    return rows
+      .map(row => ({
+        id: row.id,
+        userId: row.user_id,
+        type: row.type,
+        status: row.status,
+        payload: parseJson(row.answers_json)
+      }))
+      .filter(row => row.payload)
   },
 
   async getSubmission(guildId, submissionId) {
@@ -119,7 +128,7 @@ module.exports = {
       userId: rows[0].user_id,
       type: rows[0].type,
       status: rows[0].status,
-      payload: parseSubmissionJson(rows[0].answers_json)
+      payload: parseJson(rows[0].answers_json)
     }
   },
 
