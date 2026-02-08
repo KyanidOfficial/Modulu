@@ -87,10 +87,10 @@ module.exports = {
     return result.affectedRows > 0
   },
 
-  async deleteAllSubmissions(guildId) {
+  async deleteSubmissionsByType(guildId, type) {
     const [result] = await pool.query(
-      "DELETE FROM application_submissions WHERE guild_id = ?",
-      [guildId]
+      "DELETE FROM application_submissions WHERE guild_id = ? AND type = ?",
+      [guildId, type]
     )
 
     return result.affectedRows

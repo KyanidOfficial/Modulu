@@ -611,23 +611,21 @@ module.exports = async interaction => {
     return
   }
 
-  if (interaction.customId === "apps:submissions:delete-all:modal") {
-    const confirmation = normalize(parseModalValue(interaction, "confirmation"))
-    if (confirmation !== "delete all") {
-      await replySystem(interaction, {
-        title: "Confirmation required",
-        description: "Type `delete all` to confirm deleting all submissions.",
-        color: COLORS.warning
-      })
-      return
-    }
+  if (interaction.customId === "apps:submissions:delete-type:modal") {
+    try {
+      const type = validateType(parseModalValue(interaction, "type"))
+      const deletedCount = await service.deleteSubmissionsByType(interaction.guild.id, type)
 
-    const deletedCount = await service.deleteAllSubmissions(interaction.guild.id)
-    await replySystem(interaction, {
-      title: "Submissions deleted",
-      description: deletedCount ? `Deleted **${deletedCount}** submissions.` : "No submissions were found to delete.",
-      color: COLORS.success
-    })
+      await replySystem(interaction, {
+        title: "Submissions deleted",
+        description: deletedCount
+          ? `Deleted **${deletedCount}** submissions for **${safe(type)}**.`
+          : `No submissions were found for **${safe(type)}**.`,
+        color: COLORS.success
+      })
+    } catch (error) {
+      await replySystem(interaction, { title: "Invalid input", description: error.message, color: COLORS.error })
+    }
     return
   }
 
@@ -926,14 +924,14 @@ module.exports = async interaction => {
     return
   }
 
-  if (interaction.customId === "apps:submissions:delete-all") {
-    const modal = new ModalBuilder().setCustomId("apps:submissions:delete-all:modal").setTitle("Delete All Submissions")
+  if (interaction.customId === "apps:submissions:delete-type") {
+    const modal = new ModalBuilder().setCustomId("apps:submissions:delete-type:modal").setTitle("Delete Type Submissions")
     modal.addComponents(
       new ActionRowBuilder().addComponents(
         new TextInputBuilder()
-          .setCustomId("confirmation")
-          .setLabel("Type delete all to confirm")
-          .setPlaceholder("delete all")
+          .setCustomId("type")
+          .setLabel("Application type")
+          .setPlaceholder("staff")
           .setStyle(TextInputStyle.Short)
           .setRequired(true)
       )

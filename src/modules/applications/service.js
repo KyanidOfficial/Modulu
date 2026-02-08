@@ -52,8 +52,9 @@ module.exports = {
     return db.getSubmission(guildId, submissionId)
   },
 
-  async deleteAllSubmissions(guildId) {
-    return db.deleteAllSubmissions(guildId)
+  async deleteSubmissionsByType(guildId, type) {
+    const normalizedType = validateType(type)
+    return db.deleteSubmissionsByType(guildId, normalizedType)
   },
 
   async addStaffNote({ guildId, submissionId, reviewerId, note }) {

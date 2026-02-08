@@ -51,8 +51,8 @@ module.exports = {
             .setStyle(ButtonStyle.Danger),
 
           new ButtonBuilder()
-            .setCustomId("apps:submissions:delete-all")
-            .setLabel("Delete All Submissions")
+            .setCustomId("apps:submissions:delete-type")
+            .setLabel("Delete Type Submissions")
             .setStyle(ButtonStyle.Danger)
         )
       ]
