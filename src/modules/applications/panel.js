@@ -13,7 +13,7 @@ module.exports = {
       embeds: [
         systemEmbed({
           title: "Applications",
-          description: "Manage server applications.",
+          description: "Manage application types and submissions.",
           color: COLORS.info
         })
       ],
@@ -21,22 +21,33 @@ module.exports = {
         new ActionRowBuilder().addComponents(
           new ButtonBuilder()
             .setCustomId("apps:create")
-            .setLabel("Create")
+            .setLabel("Create Type")
             .setStyle(ButtonStyle.Success),
 
           new ButtonBuilder()
             .setCustomId("apps:list")
-            .setLabel("List")
+            .setLabel("List Types")
             .setStyle(ButtonStyle.Primary),
 
           new ButtonBuilder()
             .setCustomId("apps:questions")
-            .setLabel("Questions")
+            .setLabel("Question Editor")
             .setStyle(ButtonStyle.Secondary),
 
           new ButtonBuilder()
+            .setCustomId("apps:applications")
+            .setLabel("View Applications")
+            .setStyle(ButtonStyle.Secondary),
+
+          new ButtonBuilder()
+            .setCustomId("apps:submissions")
+            .setLabel("View Submissions")
+            .setStyle(ButtonStyle.Secondary)
+        ),
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder()
             .setCustomId("apps:delete")
-            .setLabel("Delete")
+            .setLabel("Delete Type")
             .setStyle(ButtonStyle.Danger)
         )
       ]
