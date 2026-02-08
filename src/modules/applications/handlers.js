@@ -10,6 +10,14 @@ const {
 
 const { isAdmin } = require("./permissions")
 const service = require("./service")
+const db = require("../../core/database/applications")
+const {
+  getSession: getApplySession,
+  updateSession: updateApplySession,
+  clearSession: clearApplySession,
+  beginSessionLock: beginApplyLock,
+  endSessionLock: endApplyLock
+} = require("./modalApply.store")
 const systemEmbed = require("../../messages/embeds/system.embed")
 const COLORS = require("../../utils/colors")
 const { normalize, validateType, validateDescription } = require("./validators")
@@ -183,6 +191,63 @@ const renderSubmissionList = async (interaction, page = 0) => {
   })
 }
 
+
+const APPLY_QUESTIONS_PER_MODAL = 5
+
+const buildApplyStepModal = ({ session, step }) => {
+  const modal = new ModalBuilder()
+    .setCustomId(`apps:apply:step:${session.submissionId}:${step}`)
+    .setTitle(`Apply: ${session.type} (${step + 1}/${session.totalSteps})`)
+
+  const questions = session.questions.slice(step * APPLY_QUESTIONS_PER_MODAL, (step + 1) * APPLY_QUESTIONS_PER_MODAL)
+
+  questions.forEach((question, offset) => {
+    const globalIndex = step * APPLY_QUESTIONS_PER_MODAL + offset
+    const style = question.kind === "short" ? TextInputStyle.Short : TextInputStyle.Paragraph
+
+    const input = new TextInputBuilder()
+      .setCustomId(`q_${globalIndex}`)
+      .setLabel((question.prompt || `Question ${globalIndex + 1}`).slice(0, 45))
+      .setRequired(question.required !== false)
+      .setStyle(style)
+
+    const placeholder = question.placeholder || question.description || "Enter your answer"
+    if (placeholder) input.setPlaceholder(String(placeholder).slice(0, 100))
+
+    if (Number.isInteger(question.minLength)) input.setMinLength(Math.max(0, Math.min(question.minLength, 4000)))
+    if (Number.isInteger(question.maxLength)) input.setMaxLength(Math.max(1, Math.min(question.maxLength, 4000)))
+
+    modal.addComponents(new ActionRowBuilder().addComponents(input))
+  })
+
+  return modal
+}
+
+const persistApplyDraft = async session => {
+  const payload = {
+    applicant: {
+      id: session.userId,
+      username: session.username,
+      tag: session.userTag
+    },
+    guild: {
+      id: session.guildId,
+      name: session.guildName
+    },
+    type: session.type,
+    startedAt: session.startedAt,
+    submittedAt: null,
+    questions: session.answers,
+    staffNotes: [],
+    decision: null
+  }
+
+  await db.saveSubmission(session.guildId, session.submissionId, {
+    status: "pending",
+    payload
+  })
+}
+
 module.exports = async interaction => {
   if (!interaction.inGuild() || !interaction.guild || !interaction.member) {
     await replySystem(interaction, {
@@ -191,6 +256,146 @@ module.exports = async interaction => {
       color: COLORS.warning
     })
     return
+  }
+
+  if (interaction.customId?.startsWith("apps:apply:")) {
+    const sessionContext = { guildId: interaction.guild.id, userId: interaction.user.id }
+
+    if (interaction.customId.startsWith("apps:apply:step:")) {
+      const parts = interaction.customId.split(":")
+      const submissionId = Number(parts[3])
+      const step = Number(parts[4])
+      const session = getApplySession(sessionContext)
+
+      if (!session || session.submissionId !== submissionId || session.step !== step) {
+        await replySystem(interaction, {
+          title: "Application expired",
+          description: "Your application session expired or is out of sync. Run /apply again.",
+          color: COLORS.warning
+        })
+        return
+      }
+
+      if (!beginApplyLock(sessionContext)) {
+        await replySystem(interaction, {
+          title: "Please wait",
+          description: "Your previous modal submission is still processing.",
+          color: COLORS.warning
+        })
+        return
+      }
+
+      try {
+        const chunk = session.questions.slice(step * APPLY_QUESTIONS_PER_MODAL, (step + 1) * APPLY_QUESTIONS_PER_MODAL)
+        const nextAnswers = [...session.answers]
+
+        chunk.forEach((question, offset) => {
+          const globalIndex = step * APPLY_QUESTIONS_PER_MODAL + offset
+          const raw = parseModalValue(interaction, `q_${globalIndex}`).trim()
+
+          nextAnswers[globalIndex] = {
+            id: question.id || `q_${globalIndex}`,
+            key: question.key || `q${globalIndex + 1}`,
+            prompt: question.prompt,
+            required: question.required !== false,
+            kind: question.kind || "paragraph",
+            answer: raw,
+            answeredAt: new Date().toISOString()
+          }
+        })
+
+        const updated = updateApplySession({
+          ...sessionContext,
+          patch: {
+            answers: nextAnswers,
+            step: step + 1
+          }
+        })
+
+        await persistApplyDraft(updated)
+
+        if (updated.step < updated.totalSteps) {
+          await interaction.reply({
+            embeds: [
+              systemEmbed({
+                title: "Continue application",
+                description: "Submit the next modal step to continue your application.",
+                color: COLORS.info
+              })
+            ],
+            components: [
+              new ActionRowBuilder().addComponents(
+                new ButtonBuilder()
+                  .setCustomId(`apps:apply:continue:${updated.submissionId}:${updated.step}`)
+                  .setLabel("Continue")
+                  .setStyle(ButtonStyle.Primary)
+              )
+            ],
+            ephemeral: true
+          })
+          return
+        }
+
+        const finalPayload = {
+          applicant: {
+            id: updated.userId,
+            username: updated.username,
+            tag: updated.userTag
+          },
+          guild: {
+            id: updated.guildId,
+            name: updated.guildName
+          },
+          type: updated.type,
+          startedAt: updated.startedAt,
+          submittedAt: new Date().toISOString(),
+          questions: updated.answers,
+          staffNotes: [],
+          decision: null
+        }
+
+        await db.saveSubmission(updated.guildId, updated.submissionId, {
+          status: "pending",
+          payload: finalPayload
+        })
+
+        clearApplySession(sessionContext)
+
+        await interaction.reply({
+          embeds: [
+            systemEmbed({
+              title: "Application submitted",
+              description: "Your application has been submitted successfully.",
+              color: COLORS.success
+            })
+          ],
+          ephemeral: true
+        })
+        return
+      } finally {
+        endApplyLock(sessionContext)
+      }
+    }
+
+    if (interaction.customId.startsWith("apps:apply:continue:")) {
+      const parts = interaction.customId.split(":")
+      const submissionId = Number(parts[3])
+      const step = Number(parts[4])
+      const session = getApplySession(sessionContext)
+
+      if (!session || session.submissionId !== submissionId || session.step !== step) {
+        await replySystem(interaction, {
+          title: "Application expired",
+          description: "Your application session expired or is out of sync. Run /apply again.",
+          color: COLORS.warning
+        })
+        return
+      }
+
+      const modal = buildApplyStepModal({ session, step })
+      await showModalOrError(interaction, modal)
+      return
+    }
   }
 
   if (!isAdmin(interaction.member)) {

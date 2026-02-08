@@ -1,81 +1,66 @@
-// src/modules/applications/apply.flow.js
+const {
+  ModalBuilder,
+  ActionRowBuilder,
+  TextInputBuilder,
+  TextInputStyle
+} = require("discord.js")
+
 const db = require("../../core/database/applications")
 const systemEmbed = require("../../messages/embeds/system.embed")
 const COLORS = require("../../utils/colors")
-const {
-  canStartApplication,
-  startSession,
-  cancelSession,
-  setQuestionMessageRef
-} = require("./session.store")
+const { createSession, getSession } = require("./modalApply.store")
 
-const log = (message, meta = {}) => {
-  const parts = Object.entries(meta).map(([k, v]) => `${k}=${v}`)
-  console.log(`[APPLICATIONS] ${message}${parts.length ? ` ${parts.join(" ")}` : ""}`)
+const QUESTIONS_PER_MODAL = 5
+
+const chunkQuestions = (questions, step) =>
+  questions.slice(step * QUESTIONS_PER_MODAL, (step + 1) * QUESTIONS_PER_MODAL)
+
+const buildQuestionInput = (question, globalIndex) => {
+  const kind = question.kind === "short" ? TextInputStyle.Short : TextInputStyle.Paragraph
+
+  const input = new TextInputBuilder()
+    .setCustomId(`q_${globalIndex}`)
+    .setLabel((question.prompt || `Question ${globalIndex + 1}`).slice(0, 45))
+    .setRequired(question.required !== false)
+    .setStyle(kind)
+
+  const placeholder = question.placeholder || question.description || "Enter your answer"
+  if (placeholder) input.setPlaceholder(String(placeholder).slice(0, 100))
+
+  const minLength = Number.isInteger(question.minLength) ? Math.max(0, Math.min(question.minLength, 4000)) : null
+  const maxLength = Number.isInteger(question.maxLength) ? Math.max(1, Math.min(question.maxLength, 4000)) : null
+
+  if (minLength !== null) input.setMinLength(minLength)
+  if (maxLength !== null) input.setMaxLength(maxLength)
+
+  return input
 }
 
-const questionEmbed = (session, question) => {
-  const requiredLabel = question.required === false ? "Optional" : "Required"
-  const answerLabel = question.kind === "short" ? "short answer" : "detailed answer"
+const buildApplyModal = ({ session, step }) => {
+  const modal = new ModalBuilder()
+    .setCustomId(`apps:apply:step:${session.submissionId}:${step}`)
+    .setTitle(`Apply: ${session.type} (${step + 1}/${session.totalSteps})`)
 
-  return systemEmbed({
-    title: `Application: ${session.type}`,
-    description:
-      `Question ${session.index + 1} of ${session.questions.length}\n` +
-      `(${requiredLabel}, ${answerLabel})\n\n${question.prompt}\n\n` +
-      "Reply in this DM to continue. Type `cancel` to stop.",
-    color: COLORS.info
+  const questions = chunkQuestions(session.questions, step)
+  questions.forEach((question, offset) => {
+    const globalIndex = step * QUESTIONS_PER_MODAL + offset
+    modal.addComponents(new ActionRowBuilder().addComponents(buildQuestionInput(question, globalIndex)))
   })
-}
 
-const sendOrEditQuestionMessage = async session => {
-  const question = session.questions[session.index]
-  if (!question) return null
-
-  const embed = questionEmbed(session, question)
-
-  if (session.questionMessageId) {
-    try {
-      const existing = await session.dm.messages.fetch(session.questionMessageId)
-      const edited = await existing.edit({ embeds: [embed] })
-      log("Edited question embed", {
-        userId: session.userId,
-        sessionId: session.submissionId,
-        messageId: edited.id,
-        index: session.index
-      })
-      return edited
-    } catch (error) {
-      log("Question edit failed, falling back to send", {
-        userId: session.userId,
-        sessionId: session.submissionId,
-        messageId: session.questionMessageId,
-        reason: error?.message || "unknown"
-      })
-    }
-  }
-
-  const sent = await session.dm.send({ embeds: [embed] })
-  setQuestionMessageRef({ userId: session.userId, channelId: session.dm.id, messageId: sent.id })
-  log("Sent question embed", {
-    userId: session.userId,
-    sessionId: session.submissionId,
-    messageId: sent.id,
-    index: session.index
-  })
-  return sent
+  return modal
 }
 
 module.exports = async interaction => {
   if (!interaction.inGuild() || !interaction.guild) {
-    await interaction.editReply({
+    await interaction.reply({
       embeds: [
         systemEmbed({
           title: "Unavailable",
           description: "Applications can only be started from a server.",
           color: COLORS.warning
         })
-      ]
+      ],
+      ephemeral: true
     })
     return
   }
@@ -84,73 +69,48 @@ module.exports = async interaction => {
   const config = await db.getConfig(interaction.guild.id, type)
 
   if (!config || config.state !== "open") {
-    await interaction.editReply({
+    await interaction.reply({
       embeds: [
         systemEmbed({
           title: "Unavailable",
           description: "This application is not open.",
           color: COLORS.warning
         })
-      ]
+      ],
+      ephemeral: true
     })
     return
   }
 
   const questions = Array.isArray(config.questions) ? config.questions : []
   if (!questions.length) {
-    await interaction.editReply({
+    await interaction.reply({
       embeds: [
         systemEmbed({
           title: "No questions configured",
-          description: "Staff has not configured questions for this application yet.",
+          description: "This application type has no questions yet.",
           color: COLORS.warning
         })
-      ]
+      ],
+      ephemeral: true
     })
     return
   }
 
-  const startCheck = canStartApplication({
-    userId: interaction.user.id,
-    guildId: interaction.guild.id,
-    type
-  })
-
-  if (!startCheck.ok) {
-    await interaction.editReply({
+  const existing = getSession({ guildId: interaction.guild.id, userId: interaction.user.id })
+  if (existing) {
+    await interaction.reply({
       embeds: [
         systemEmbed({
-          title: "Cannot start application",
-          description: startCheck.reason,
+          title: "Application in progress",
+          description: "You already have an active application flow in progress.",
           color: COLORS.warning
         })
-      ]
+      ],
+      ephemeral: true
     })
     return
   }
-
-  const dm = await interaction.user.createDM().catch(error => {
-    log("DM channel creation failed", {
-      userId: interaction.user.id,
-      reason: error?.message || "unknown"
-    })
-    return null
-  })
-
-  if (!dm) {
-    await interaction.editReply({
-      embeds: [
-        systemEmbed({
-          title: "DMs disabled",
-          description: "Enable DMs to apply.",
-          color: COLORS.error
-        })
-      ]
-    })
-    return
-  }
-
-  log("DM channel created", { userId: interaction.user.id, channelId: dm.id })
 
   const submissionId = await db.createSubmission({
     guildId: interaction.guild.id,
@@ -176,78 +136,20 @@ module.exports = async interaction => {
     status: "pending"
   })
 
-  const session = startSession({
+  const totalSteps = Math.ceil(questions.length / QUESTIONS_PER_MODAL)
+  const session = createSession({
+    submissionId,
+    guildId: interaction.guild.id,
     userId: interaction.user.id,
-    session: {
-      userId: interaction.user.id,
-      username: interaction.user.username,
-      userTag: interaction.user.tag,
-      guildId: interaction.guild.id,
-      guildName: interaction.guild.name,
-      type,
-      questions,
-      dm,
-      submissionId
-    },
-    onTimeout: async expiredSession => {
-      await db.deleteSubmission(expiredSession.guildId, expiredSession.submissionId).catch(() => {})
-
-      const timeoutEmbed = systemEmbed({
-        title: "Application timed out",
-        description: "No response received in time. The draft was cancelled. Start /apply again when ready.",
-        color: COLORS.warning
-      })
-
-      if (expiredSession.questionMessageId) {
-        try {
-          const msg = await expiredSession.dm.messages.fetch(expiredSession.questionMessageId)
-          await msg.edit({ embeds: [timeoutEmbed] })
-          log("Timeout embed edited", { userId: expiredSession.userId, sessionId: expiredSession.submissionId })
-          return
-        } catch (error) {
-          log("Timeout edit failed, fallback send", {
-            userId: expiredSession.userId,
-            sessionId: expiredSession.submissionId,
-            reason: error?.message || "unknown"
-          })
-        }
-      }
-
-      await expiredSession.dm.send({ embeds: [timeoutEmbed] }).catch(() => {})
-    }
+    username: interaction.user.username,
+    userTag: interaction.user.tag,
+    type,
+    questions,
+    step: 0,
+    totalSteps,
+    answers: []
   })
 
-  const sent = await sendOrEditQuestionMessage(session).then(() => true).catch(error => {
-    log("Initial question send failed", {
-      userId: interaction.user.id,
-      sessionId: submissionId,
-      reason: error?.message || "unknown"
-    })
-    return false
-  })
-
-  if (!sent) {
-    cancelSession(interaction.user.id)
-    await db.deleteSubmission(interaction.guild.id, submissionId).catch(() => {})
-    await interaction.editReply({
-      embeds: [
-        systemEmbed({
-          title: "DM unavailable",
-          description: "I could not deliver your application questions in DMs.",
-          color: COLORS.error
-        })
-      ]
-    })
-    return
-  }
-
-  await interaction.editReply({
-    embeds: [
-      systemEmbed({
-        title: "Application started",
-        description: "Check your DMs. Reply there to continue.",
-        color: COLORS.success
-      })
-    ]
-  })
+  const modal = buildApplyModal({ session, step: 0 })
+  await interaction.showModal(modal)
 }
