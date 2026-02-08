@@ -4,6 +4,7 @@ const applyFlow = require("../../../modules/applications/apply.flow")
 
 module.exports = {
   COMMAND_ENABLED,
+  skipDefer: true,
 
   data: new SlashCommandBuilder()
     .setName("apply")
