@@ -443,6 +443,17 @@ module.exports = async interaction => {
         description: interaction.customId.endsWith(":mine") ? "You have not created any application types." : "No application types found.",
         color: COLORS.warning
       })
+      .join("\n")
+      .slice(0, 3800)
+
+    await replySystem(interaction, { title: "Application Types", description, color: COLORS.info })
+    return
+  }
+
+  if (interaction.customId === "apps:submissions") {
+    const submissions = await service.listSubmissions(interaction.guild.id)
+    if (!submissions.length) {
+      await replySystem(interaction, { title: "View Submissions", description: "No submissions found.", color: COLORS.warning })
       return
     }
 
