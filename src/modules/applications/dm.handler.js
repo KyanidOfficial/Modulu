@@ -1,3 +1,4 @@
+// src/modules/applications/dm.handler.js
 const db = require("../../core/database/applications")
 const systemEmbed = require("../../messages/embeds/system.embed")
 const applicationSubmittedEmbed = require("../../messages/embeds/application.submitted.embed")
@@ -10,35 +11,90 @@ const {
   saveAnswer,
   completeSession,
   cancelSession,
-  setCooldown
+  setCooldown,
+  setQuestionMessageRef
 } = require("./session.store")
 
 const MIN_REPLY_LENGTH = 2
 const MAX_REPLY_LENGTH = 1200
 
+const log = (message, meta = {}) => {
+  const parts = Object.entries(meta).map(([k, v]) => `${k}=${v}`)
+  console.log(`[APPLICATIONS] ${message}${parts.length ? ` ${parts.join(" ")}` : ""}`)
+}
+
 const sanitizeText = text => (text || "").trim()
 
-const sendQuestion = async session => {
+const questionEmbed = session => {
   const question = session.questions[session.index]
-  if (!question) return false
-
   const requiredLabel = question.required === false ? "Optional" : "Required"
   const answerLabel = question.kind === "short" ? "short answer" : "detailed answer"
 
-  await session.dm.send({
-    embeds: [
-      systemEmbed({
-        title: `Application: ${session.type}`,
-        description:
-          `Question ${session.index + 1} of ${session.questions.length}\n` +
-          `(${requiredLabel}, ${answerLabel})\n\n${question.prompt}\n\n` +
-          "Reply in this DM to continue. Type `cancel` to stop.",
-        color: COLORS.info
-      })
-    ]
+  return systemEmbed({
+    title: `Application: ${session.type}`,
+    description:
+      `Question ${session.index + 1} of ${session.questions.length}\n` +
+      `(${requiredLabel}, ${answerLabel})\n\n${question.prompt}\n\n` +
+      "Reply in this DM to continue. Type `cancel` to stop.",
+    color: COLORS.info
   })
+}
 
-  return true
+const editOrSendQuestion = async session => {
+  const embed = questionEmbed(session)
+
+  if (session.questionMessageId) {
+    try {
+      const existing = await session.dm.messages.fetch(session.questionMessageId)
+      const edited = await existing.edit({ embeds: [embed] })
+      log("Question embed edited", {
+        userId: session.userId,
+        sessionId: session.submissionId,
+        messageId: edited.id,
+        index: session.index
+      })
+      return edited
+    } catch (error) {
+      log("Question edit failed, fallback send", {
+        userId: session.userId,
+        sessionId: session.submissionId,
+        reason: error?.message || "unknown"
+      })
+    }
+  }
+
+  const sent = await session.dm.send({ embeds: [embed] })
+  setQuestionMessageRef({ userId: session.userId, channelId: session.dm.id, messageId: sent.id })
+  log("Question embed sent", {
+    userId: session.userId,
+    sessionId: session.submissionId,
+    messageId: sent.id,
+    index: session.index
+  })
+  return sent
+}
+
+const editOrSendTerminal = async (session, embed, actionName) => {
+  if (session?.questionMessageId) {
+    try {
+      const msg = await session.dm.messages.fetch(session.questionMessageId)
+      await msg.edit({ embeds: [embed] })
+      log(`${actionName} embed edited`, {
+        userId: session.userId,
+        sessionId: session.submissionId,
+        messageId: session.questionMessageId
+      })
+      return
+    } catch (error) {
+      log(`${actionName} edit failed, fallback send`, {
+        userId: session.userId,
+        sessionId: session.submissionId,
+        reason: error?.message || "unknown"
+      })
+    }
+  }
+
+  await session.dm.send({ embeds: [embed] }).catch(() => {})
 }
 
 const persistDraft = async session => {
@@ -65,15 +121,47 @@ const persistDraft = async session => {
 }
 
 module.exports = async message => {
+  log("messageCreate observed", {
+    userId: message.author?.id || "unknown",
+    channelType: message.channel?.type,
+    isDM: Boolean(message.channel?.isDMBased?.())
+  })
+
   if (message.author?.bot) return false
   if (!message.channel?.isDMBased?.()) return false
 
-  const session = getSession(message.author.id)
-  if (!session) return false
+  log("DM message detected", {
+    userId: message.author.id,
+    channelId: message.channel.id,
+    length: (message.content || "").length,
+    channelType: message.channel.type
+  })
 
-  if (session.dm.id !== message.channel.id) return false
+  const session = getSession(message.author.id)
+  log("Session lookup", {
+    userId: message.author.id,
+    found: Boolean(session)
+  })
+
+  if (!session) {
+    log("No active session", { userId: message.author.id })
+    return false
+  }
+
+  if (session.dmChannelId && session.dmChannelId !== message.channel.id) {
+    log("DM channel mismatch", {
+      userId: message.author.id,
+      expected: session.dmChannelId,
+      got: message.channel.id
+    })
+    return false
+  }
 
   if (!beginProcessing(message.author.id)) {
+    log("Session locked, duplicate message ignored", {
+      userId: message.author.id,
+      sessionId: session.submissionId
+    })
     return true
   }
 
@@ -94,19 +182,26 @@ module.exports = async message => {
     }
 
     if (content.toLowerCase() === "cancel") {
+      log("Cancel detected", {
+        userId: message.author.id,
+        sessionId: session.submissionId
+      })
+
       const closed = cancelSession(message.author.id)
       if (closed) {
         await db.deleteSubmission(closed.guildId, closed.submissionId).catch(() => {})
+        const cancelEmbed = systemEmbed({
+          title: "Application canceled",
+          description: "Your application session has been canceled and cleaned up.",
+          color: COLORS.warning
+        })
+        await editOrSendTerminal(closed, cancelEmbed, "Cancel")
       }
-      await message.channel.send({
-        embeds: [
-          systemEmbed({
-            title: "Application canceled",
-            description: "Your application session has been canceled and cleaned up.",
-            color: COLORS.warning
-          })
-        ]
-      }).catch(() => {})
+
+      log("Session canceled", {
+        userId: message.author.id,
+        sessionId: session.submissionId
+      })
       return true
     }
 
@@ -136,10 +231,15 @@ module.exports = async message => {
       return true
     }
 
-    const updated = saveAnswer({
+    log("DM received", {
       userId: message.author.id,
-      answer: content
+      sessionId: session.submissionId,
+      index: session.index,
+      length: content.length
     })
+
+    const beforeIndex = session.index
+    const updated = saveAnswer({ userId: message.author.id, answer: content })
 
     if (!updated) {
       await message.channel.send({
@@ -151,16 +251,43 @@ module.exports = async message => {
           })
         ]
       }).catch(() => {})
+
       cancelSession(message.author.id)
+      log("Session canceled due to sync error", {
+        userId: message.author.id,
+        sessionId: session.submissionId
+      })
       return true
     }
+
+    log("Answer saved", {
+      userId: message.author.id,
+      sessionId: updated.submissionId,
+      beforeIndex,
+      afterIndex: updated.index
+    })
 
     await persistDraft(updated)
     touchSession(message.author.id)
 
     const hasMoreQuestions = updated.index < updated.questions.length
     if (hasMoreQuestions) {
-      const sent = await sendQuestion(updated).then(() => true).catch(() => false)
+      log("Advancing question index", {
+        userId: updated.userId,
+        sessionId: updated.submissionId,
+        from: beforeIndex,
+        to: updated.index
+      })
+
+      const sent = await editOrSendQuestion(updated).then(() => true).catch(error => {
+        log("Failed to send/edit next question", {
+          userId: updated.userId,
+          sessionId: updated.submissionId,
+          reason: error?.message || "unknown"
+        })
+        return false
+      })
+
       if (!sent) {
         const closed = cancelSession(message.author.id)
         if (closed) {
@@ -202,16 +329,26 @@ module.exports = async message => {
       type: completed.type
     })
 
-    await message.channel.send({
-      embeds: [
-        applicationSubmittedEmbed({
-          type: completed.type,
-          guild: completed.guildName,
-          submissionId: completed.submissionId
-        })
-      ]
-    }).catch(() => {})
+    const submittedEmbed = applicationSubmittedEmbed({
+      type: completed.type,
+      guild: completed.guildName,
+      submissionId: completed.submissionId
+    })
 
+    await editOrSendTerminal(completed, submittedEmbed, "Completion")
+
+    log("Session finalized", {
+      userId: completed.userId,
+      sessionId: completed.submissionId
+    })
+
+    return true
+  } catch (error) {
+    log("DM handler failure", {
+      userId: message.author?.id || "unknown",
+      sessionId: session?.submissionId || "none",
+      reason: error?.message || "unknown"
+    })
     return true
   } finally {
     endProcessing(message.author.id)

@@ -1,27 +1,69 @@
+// src/modules/applications/apply.flow.js
 const db = require("../../core/database/applications")
 const systemEmbed = require("../../messages/embeds/system.embed")
 const COLORS = require("../../utils/colors")
-const { canStartApplication, startSession, cancelSession } = require("./session.store")
+const {
+  canStartApplication,
+  startSession,
+  cancelSession,
+  setQuestionMessageRef
+} = require("./session.store")
 
-const sendQuestion = async session => {
-  const question = session.questions[session.index]
-  if (!question) return
+const log = (message, meta = {}) => {
+  const parts = Object.entries(meta).map(([k, v]) => `${k}=${v}`)
+  console.log(`[APPLICATIONS] ${message}${parts.length ? ` ${parts.join(" ")}` : ""}`)
+}
 
+const questionEmbed = (session, question) => {
   const requiredLabel = question.required === false ? "Optional" : "Required"
   const answerLabel = question.kind === "short" ? "short answer" : "detailed answer"
 
-  await session.dm.send({
-    embeds: [
-      systemEmbed({
-        title: `Application: ${session.type}`,
-        description:
-          `Question ${session.index + 1} of ${session.questions.length}\n` +
-          `(${requiredLabel}, ${answerLabel})\n\n${question.prompt}\n\n` +
-          "Reply in this DM to continue. Type `cancel` to stop.",
-        color: COLORS.info
-      })
-    ]
+  return systemEmbed({
+    title: `Application: ${session.type}`,
+    description:
+      `Question ${session.index + 1} of ${session.questions.length}\n` +
+      `(${requiredLabel}, ${answerLabel})\n\n${question.prompt}\n\n` +
+      "Reply in this DM to continue. Type `cancel` to stop.",
+    color: COLORS.info
   })
+}
+
+const sendOrEditQuestionMessage = async session => {
+  const question = session.questions[session.index]
+  if (!question) return null
+
+  const embed = questionEmbed(session, question)
+
+  if (session.questionMessageId) {
+    try {
+      const existing = await session.dm.messages.fetch(session.questionMessageId)
+      const edited = await existing.edit({ embeds: [embed] })
+      log("Edited question embed", {
+        userId: session.userId,
+        sessionId: session.submissionId,
+        messageId: edited.id,
+        index: session.index
+      })
+      return edited
+    } catch (error) {
+      log("Question edit failed, falling back to send", {
+        userId: session.userId,
+        sessionId: session.submissionId,
+        messageId: session.questionMessageId,
+        reason: error?.message || "unknown"
+      })
+    }
+  }
+
+  const sent = await session.dm.send({ embeds: [embed] })
+  setQuestionMessageRef({ userId: session.userId, channelId: session.dm.id, messageId: sent.id })
+  log("Sent question embed", {
+    userId: session.userId,
+    sessionId: session.submissionId,
+    messageId: sent.id,
+    index: session.index
+  })
+  return sent
 }
 
 module.exports = async interaction => {
@@ -87,7 +129,14 @@ module.exports = async interaction => {
     return
   }
 
-  const dm = await interaction.user.createDM().catch(() => null)
+  const dm = await interaction.user.createDM().catch(error => {
+    log("DM channel creation failed", {
+      userId: interaction.user.id,
+      reason: error?.message || "unknown"
+    })
+    return null
+  })
+
   if (!dm) {
     await interaction.editReply({
       embeds: [
@@ -100,6 +149,8 @@ module.exports = async interaction => {
     })
     return
   }
+
+  log("DM channel created", { userId: interaction.user.id, channelId: dm.id })
 
   const submissionId = await db.createSubmission({
     guildId: interaction.guild.id,
@@ -140,19 +191,41 @@ module.exports = async interaction => {
     },
     onTimeout: async expiredSession => {
       await db.deleteSubmission(expiredSession.guildId, expiredSession.submissionId).catch(() => {})
-      await expiredSession.dm.send({
-        embeds: [
-          systemEmbed({
-            title: "Application timed out",
-            description: "No response received in time. The draft was cancelled. Start /apply again when ready.",
-            color: COLORS.warning
+
+      const timeoutEmbed = systemEmbed({
+        title: "Application timed out",
+        description: "No response received in time. The draft was cancelled. Start /apply again when ready.",
+        color: COLORS.warning
+      })
+
+      if (expiredSession.questionMessageId) {
+        try {
+          const msg = await expiredSession.dm.messages.fetch(expiredSession.questionMessageId)
+          await msg.edit({ embeds: [timeoutEmbed] })
+          log("Timeout embed edited", { userId: expiredSession.userId, sessionId: expiredSession.submissionId })
+          return
+        } catch (error) {
+          log("Timeout edit failed, fallback send", {
+            userId: expiredSession.userId,
+            sessionId: expiredSession.submissionId,
+            reason: error?.message || "unknown"
           })
-        ]
-      }).catch(() => {})
+        }
+      }
+
+      await expiredSession.dm.send({ embeds: [timeoutEmbed] }).catch(() => {})
     }
   })
 
-  const sent = await sendQuestion(session).then(() => true).catch(() => false)
+  const sent = await sendOrEditQuestionMessage(session).then(() => true).catch(error => {
+    log("Initial question send failed", {
+      userId: interaction.user.id,
+      sessionId: submissionId,
+      reason: error?.message || "unknown"
+    })
+    return false
+  })
+
   if (!sent) {
     cancelSession(interaction.user.id)
     await db.deleteSubmission(interaction.guild.id, submissionId).catch(() => {})

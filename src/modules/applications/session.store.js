@@ -1,3 +1,4 @@
+// src/modules/applications/session.store.js
 const ACTIVE_TIMEOUT_MS = 1000 * 60 * 10
 const APPLICATION_COOLDOWN_MS = 1000 * 60 * 10
 const START_SPAM_WINDOW_MS = 1000 * 30
@@ -5,6 +6,11 @@ const START_SPAM_WINDOW_MS = 1000 * 30
 const activeSessions = new Map()
 const cooldowns = new Map()
 const startAttempts = new Map()
+
+const log = (message, meta = {}) => {
+  const parts = Object.entries(meta).map(([k, v]) => `${k}=${v}`)
+  console.log(`[APPLICATIONS] ${message}${parts.length ? ` ${parts.join(" ")}` : ""}`)
+}
 
 const getCooldownKey = (userId, guildId, type) => `${userId}:${guildId}:${type}`
 
@@ -60,6 +66,7 @@ const scheduleTimeout = (userId, onTimeout) => {
     if (!current) return
 
     activeSessions.delete(userId)
+    log("Session timed out", { userId, sessionId: current.submissionId || "draft" })
     await onTimeout(current).catch(() => {})
   }, ACTIVE_TIMEOUT_MS)
 }
@@ -72,11 +79,21 @@ const startSession = ({ userId, session, onTimeout }) => {
     index: 0,
     timeout: null,
     processing: false,
-    onTimeout
+    onTimeout,
+    questionMessageId: null,
+    dmChannelId: session.dm?.id || null
   })
 
   scheduleTimeout(userId, onTimeout)
-  return activeSessions.get(userId)
+  const created = activeSessions.get(userId)
+  log("Session created", {
+    userId,
+    sessionId: created.submissionId || "draft",
+    guildId: created.guildId,
+    type: created.type,
+    channelId: created.dmChannelId || "unknown"
+  })
+  return created
 }
 
 const getSession = userId => activeSessions.get(userId)
@@ -99,6 +116,14 @@ const endProcessing = userId => {
   const session = activeSessions.get(userId)
   if (!session) return
   session.processing = false
+}
+
+const setQuestionMessageRef = ({ userId, channelId, messageId }) => {
+  const session = activeSessions.get(userId)
+  if (!session) return null
+  session.dmChannelId = channelId || session.dmChannelId
+  session.questionMessageId = messageId || session.questionMessageId
+  return session
 }
 
 const saveAnswer = ({ userId, answer }) => {
@@ -132,6 +157,14 @@ const cancelSession = userId => {
 
 const completeSession = userId => cancelSession(userId)
 
+const clearAllSessions = () => {
+  for (const [userId, session] of activeSessions.entries()) {
+    clearSessionTimeout(session)
+    activeSessions.delete(userId)
+  }
+  log("Cleared active sessions on startup")
+}
+
 module.exports = {
   canStartApplication,
   setCooldown,
@@ -140,7 +173,9 @@ module.exports = {
   touchSession,
   beginProcessing,
   endProcessing,
+  setQuestionMessageRef,
   saveAnswer,
   cancelSession,
-  completeSession
+  completeSession,
+  clearAllSessions
 }
