@@ -9,6 +9,17 @@ const pool = mysql.createPool({
   connectionLimit: 5
 })
 
+const parseConfigJson = raw => {
+  if (!raw) return null
+  if (typeof raw === "object") return raw
+
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return null
+  }
+}
+
 module.exports = {
   async getAllConfigs(guildId) {
     const [rows] = await pool.query(
@@ -16,10 +27,12 @@ module.exports = {
       [guildId]
     )
 
-    return rows.map(row => ({
-      type: row.type,
-      config: row.config_json // ALREADY an object
-    }))
+    return rows
+      .map(row => ({
+        type: row.type,
+        config: parseConfigJson(row.config_json)
+      }))
+      .filter(row => row.config)
   },
 
   async getConfig(guildId, type) {
@@ -29,7 +42,7 @@ module.exports = {
     )
 
     if (!rows.length) return null
-    return rows[0].config_json // ALREADY an object
+    return parseConfigJson(rows[0].config_json)
   },
 
   async saveConfig(guildId, type, config) {
@@ -44,10 +57,12 @@ module.exports = {
   },
 
   async deleteConfig(guildId, type) {
-    await pool.query(
+    const [result] = await pool.query(
       "DELETE FROM application_configs WHERE guild_id = ? AND type = ?",
       [guildId, type]
     )
+
+    return result.affectedRows > 0
   },
 
   async createSubmission({ guildId, type, userId, answers }) {

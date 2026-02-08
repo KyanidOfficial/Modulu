@@ -44,8 +44,9 @@ module.exports = async interaction => {
   })
 
   const answers = []
+  const questions = Array.isArray(config.questions) ? config.questions : []
 
-  for (const question of config.questions) {
+  for (const question of questions) {
     await dm.send({
       embeds: [
         systemEmbed({

@@ -7,21 +7,51 @@ const {
 
 const { isAdmin } = require("./permissions")
 const service = require("./service")
-const panel = require("./panel")
 const systemEmbed = require("../../messages/embeds/system.embed")
 const COLORS = require("../../utils/colors")
+const {
+  normalize,
+  validateType,
+  validateDescription
+} = require("./validators")
+
+const safeReply = async (interaction, payload) => {
+  if (interaction.replied || interaction.deferred) {
+    return interaction.editReply(payload)
+  }
+  return interaction.reply(payload)
+}
+
+const replySystem = (interaction, { title, description, color = COLORS.info }) =>
+  safeReply(interaction, {
+    embeds: [
+      systemEmbed({
+        title,
+        description,
+        color
+      })
+    ],
+    ephemeral: true
+  })
+
+const parseModalValue = (interaction, field) =>
+  interaction.fields.getTextInputValue(field) || ""
 
 module.exports = async interaction => {
+  if (!interaction.inGuild() || !interaction.guild || !interaction.member) {
+    await replySystem(interaction, {
+      title: "Unavailable",
+      description: "Application management is only available in a server.",
+      color: COLORS.warning
+    })
+    return
+  }
+
   if (!isAdmin(interaction.member)) {
-    await interaction.reply({
-      embeds: [
-        systemEmbed({
-          title: "Access denied",
-          description: "You are not allowed to manage applications.",
-          color: COLORS.error
-        })
-      ],
-      ephemeral: true
+    await replySystem(interaction, {
+      title: "Access denied",
+      description: "You are not allowed to manage applications.",
+      color: COLORS.error
     })
     return
   }
@@ -55,8 +85,30 @@ module.exports = async interaction => {
   }
 
   if (interaction.customId === "apps:create:modal") {
-    const type = interaction.fields.getTextInputValue("type").trim().toLowerCase()
-    const description = interaction.fields.getTextInputValue("description")
+    let type
+    let description
+
+    try {
+      type = validateType(parseModalValue(interaction, "type"))
+      description = validateDescription(parseModalValue(interaction, "description"))
+    } catch (error) {
+      await replySystem(interaction, {
+        title: "Invalid input",
+        description: error.message,
+        color: COLORS.error
+      })
+      return
+    }
+
+    const existingConfig = await service.getConfig(interaction.guild.id, type)
+    if (existingConfig) {
+      await replySystem(interaction, {
+        title: "Already exists",
+        description: `Application **${type}** already exists.`,
+        color: COLORS.warning
+      })
+      return
+    }
 
     await service.createConfig({
       guildId: interaction.guild.id,
@@ -64,15 +116,10 @@ module.exports = async interaction => {
       description
     })
 
-    await interaction.reply({
-      embeds: [
-        systemEmbed({
-          title: "Application created",
-          description: `Application **${type}** was created.`,
-          color: COLORS.success
-        })
-      ],
-      ephemeral: true
+    await replySystem(interaction, {
+      title: "Application created",
+      description: `Application **${type}** was created.`,
+      color: COLORS.success
     })
     return
   }
@@ -84,32 +131,25 @@ module.exports = async interaction => {
     const list = await service.listConfigs(interaction.guild.id)
 
     if (!list.length) {
-      await interaction.reply({
-        embeds: [
-          systemEmbed({
-            title: "No applications",
-            description: "No application types exist yet.",
-            color: COLORS.warning
-          })
-        ],
-        ephemeral: true
+      await replySystem(interaction, {
+        title: "No applications",
+        description: "No application types exist yet.",
+        color: COLORS.warning
       })
       return
     }
 
     const description = list
-      .map(a => `- **${a.type}**`)
+      .map(a => {
+        const status = a.config?.state || "unknown"
+        return `- **${a.type}** (${status})`
+      })
       .join("\n")
 
-    await interaction.reply({
-      embeds: [
-        systemEmbed({
-          title: "Application types",
-          description,
-          color: COLORS.info
-        })
-      ],
-      ephemeral: true
+    await replySystem(interaction, {
+      title: "Application types",
+      description,
+      color: COLORS.info
     })
     return
   }
@@ -152,57 +192,76 @@ module.exports = async interaction => {
   }
 
   if (interaction.customId === "apps:questions:add") {
-    const type = interaction.fields.getTextInputValue("type").trim().toLowerCase()
-    const key = interaction.fields.getTextInputValue("key").trim().toLowerCase()
-    const prompt = interaction.fields.getTextInputValue("prompt")
+    let type
+
+    try {
+      type = validateType(parseModalValue(interaction, "type"))
+    } catch (error) {
+      await replySystem(interaction, {
+        title: "Invalid input",
+        description: error.message,
+        color: COLORS.error
+      })
+      return
+    }
+
+    const key = normalize(parseModalValue(interaction, "key"))
+    const prompt = parseModalValue(interaction, "prompt").trim()
+
+    if (!key) {
+      await replySystem(interaction, {
+        title: "Invalid input",
+        description: "Question key is required.",
+        color: COLORS.error
+      })
+      return
+    }
+
+    if (!prompt) {
+      await replySystem(interaction, {
+        title: "Invalid input",
+        description: "Question prompt is required.",
+        color: COLORS.error
+      })
+      return
+    }
 
     const config = await service.getConfig(interaction.guild.id, type)
     if (!config) {
-      await interaction.reply({
-        embeds: [
-          systemEmbed({
-            title: "Not found",
-            description: "Application type does not exist.",
-            color: COLORS.error
-          })
-        ],
-        ephemeral: true
+      await replySystem(interaction, {
+        title: "Not found",
+        description: "Application type does not exist.",
+        color: COLORS.error
       })
       return
     }
 
-    if (config.questions.some(q => q.key === key)) {
-      await interaction.reply({
-        embeds: [
-          systemEmbed({
-            title: "Duplicate key",
-            description: "Question key already exists.",
-            color: COLORS.warning
-          })
-        ],
-        ephemeral: true
+    const questions = Array.isArray(config.questions) ? config.questions : []
+    if (questions.some(q => normalize(q.key || "") === key)) {
+      await replySystem(interaction, {
+        title: "Duplicate key",
+        description: "Question key already exists.",
+        color: COLORS.warning
       })
       return
     }
 
-    config.questions.push({
+    questions.push({
       key,
       prompt,
       kind: "paragraph",
       required: true
     })
 
-    await service.updateConfig(interaction.guild.id, type, config)
+    await service.updateConfig(interaction.guild.id, type, {
+      ...config,
+      questions
+    })
 
-    await interaction.reply({
-      embeds: [
-        systemEmbed({
-          title: "Question added",
-          description: `Added question **${key}**.`,
-          color: COLORS.success
-        })
-      ],
-      ephemeral: true
+    await replySystem(interaction, {
+      title: "Question added",
+      description: `Added question **${key}**.`,
+      color: COLORS.success
     })
     return
   }
@@ -230,19 +289,33 @@ module.exports = async interaction => {
   }
 
   if (interaction.customId === "apps:delete:modal") {
-    const type = interaction.fields.getTextInputValue("type").trim().toLowerCase()
+    let type
 
-    await service.deleteConfig(interaction.guild.id, type)
+    try {
+      type = validateType(parseModalValue(interaction, "type"))
+    } catch (error) {
+      await replySystem(interaction, {
+        title: "Invalid input",
+        description: error.message,
+        color: COLORS.error
+      })
+      return
+    }
 
-    await interaction.reply({
-      embeds: [
-        systemEmbed({
-          title: "Application deleted",
-          description: `Application **${type}** was deleted.`,
-          color: COLORS.success
-        })
-      ],
-      ephemeral: true
+    const deleted = await service.deleteConfig(interaction.guild.id, type)
+    if (!deleted) {
+      await replySystem(interaction, {
+        title: "Not found",
+        description: `Application **${type}** does not exist.`,
+        color: COLORS.warning
+      })
+      return
+    }
+
+    await replySystem(interaction, {
+      title: "Application deleted",
+      description: `Application **${type}** was deleted.`,
+      color: COLORS.success
     })
     return
   }
@@ -250,14 +323,9 @@ module.exports = async interaction => {
   /* ===============================
      FALLBACK (SAFETY)
      =============================== */
-  await interaction.reply({
-    embeds: [
-      systemEmbed({
-        title: "Unknown action",
-        description: "This action is not implemented.",
-        color: COLORS.error
-      })
-    ],
-    ephemeral: true
+  await replySystem(interaction, {
+    title: "Unknown action",
+    description: "This action is not implemented.",
+    color: COLORS.error
   })
 }
