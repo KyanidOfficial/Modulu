@@ -11,7 +11,9 @@ const successEmbed = require("../../messages/embeds/joinGate.success.embed")
 const rejectEmbed = require("../../messages/embeds/joinGate.rejected.embed")
 const approveEmbed = require("../../messages/embeds/joinGate.approved.embed")
 const feedbackEmbed = require("../../messages/embeds/feedback.embed")
+
 const staffTimeButtons = require("./staffTime.buttons")
+const handleApplications = require("../../modules/applications/handlers")
 const { requireEnabled } = require("../../utils/commandToggle")
 
 const GLOBAL_FEEDBACK_CHANNEL = "1456085711802335353"
@@ -25,7 +27,23 @@ module.exports = async (client, interaction) => {
   try {
     if (!interaction) return
 
-    /* BUTTONS */
+    /*===============================
+      APPLICATIONS PANEL (MUST BE FIRST)
+      =============================== */
+    if (
+      interaction.isButton() ||
+      interaction.isStringSelectMenu() ||
+      interaction.isModalSubmit()
+    ) {
+      if (interaction.customId?.startsWith("apps:")) {
+        await handleApplications(interaction)
+        return
+      }
+    }
+
+    /*===============================
+      BUTTONS
+      =============================== */
     if (interaction.isButton()) {
       await staffTimeButtons(interaction)
 
@@ -45,12 +63,17 @@ module.exports = async (client, interaction) => {
         .setStyle(TextInputStyle.Paragraph)
         .setRequired(true)
 
-      modal.addComponents(new ActionRowBuilder().addComponents(reason))
+      modal.addComponents(
+        new ActionRowBuilder().addComponents(reason)
+      )
+
       await interaction.showModal(modal)
       return
     }
 
-    /* MODALS */
+    /* ===============================
+       MODALS
+       =============================== */
     if (interaction.isModalSubmit()) {
 
       /* FEEDBACK */
@@ -228,7 +251,9 @@ module.exports = async (client, interaction) => {
       return
     }
 
-    /* SLASH COMMANDS */
+    /* ===============================
+       SLASH COMMANDS
+       =============================== */
     if (!interaction.isChatInputCommand()) return
 
     const command = client.commands.get(interaction.commandName)
@@ -261,37 +286,23 @@ module.exports = async (client, interaction) => {
 
     try {
       if (!interaction.isRepliable()) return
+
+      const payload = {
+        embeds: [
+          errorEmbed({
+            users: interaction.user ? `<@${interaction.user.id}>` : "Unknown",
+            punishment: "command",
+            state: "failed",
+            reason: "Internal error"
+          })
+        ],
+        ephemeral: true
+      }
+
       if (interaction.replied || interaction.deferred) {
-        try {
-          await interaction.editReply({
-            embeds: [
-              errorEmbed({
-                users: interaction.user ? `<@${interaction.user.id}>` : "Unknown",
-                punishment: "command",
-                state: "failed",
-                reason: "Internal error"
-              })
-            ]
-          })
-        } catch (err) {
-          if (!isIgnorableInteractionError(err)) throw err
-        }
+        await interaction.editReply(payload).catch(() => {})
       } else {
-        try {
-          await interaction.reply({
-            embeds: [
-              errorEmbed({
-                users: interaction.user ? `<@${interaction.user.id}>` : "Unknown",
-                punishment: "command",
-                state: "failed",
-                reason: "Internal error"
-              })
-            ],
-            ephemeral: true
-          })
-        } catch (err) {
-          if (!isIgnorableInteractionError(err)) throw err
-        }
+        await interaction.reply(payload).catch(() => {})
       }
     } catch {}
   }
