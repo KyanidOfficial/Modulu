@@ -42,6 +42,7 @@ const loadCommands = () => {
       console.log("Prepared", file.data.name)
     }
   }
+
 }
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
