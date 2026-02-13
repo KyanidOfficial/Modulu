@@ -11,36 +11,52 @@ const commands = []
 const names = new Set()
 const base = path.join(__dirname, "../commands")
 
-const loadCommands = () => {
-  for (const category of fs.readdirSync(base)) {
-    const catPath = path.join(base, category)
-    if (!fs.statSync(catPath).isDirectory()) continue
+const findSlashCommandFiles = (dir, root) => {
+  const files = []
+  for (const entry of fs.readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    const stat = fs.statSync(full)
 
-    for (const folder of fs.readdirSync(catPath)) {
-      const cmdPath = path.join(catPath, folder)
-      if (!fs.statSync(cmdPath).isDirectory()) continue
-
-      const slashPath = path.join(cmdPath, "slash.js")
-      if (!fs.existsSync(slashPath)) continue
-
-      const file = require(slashPath)
-
-      if (!file.data || !file.data.name) {
-        throw new Error(`Missing data for ${slashPath}`)
-      }
-      if (names.has(file.data.name)) {
-        throw new Error(`Duplicate slash name ${file.data.name}`)
-      }
-
-      if (!isCommandEnabled(file)) {
-        console.log("Skipped disabled command", file.data.name)
-        continue
-      }
-
-      names.add(file.data.name)
-      commands.push(file.data.toJSON())
-      console.log("Prepared", file.data.name)
+    if (stat.isDirectory()) {
+      files.push(...findSlashCommandFiles(full, root))
+      continue
     }
+
+    if (!entry.endsWith(".js")) continue
+    if (entry === "meta.js" || entry === "prefix.js") continue
+
+    const relativeDir = path.relative(root, path.dirname(full))
+    const depth = relativeDir.split(path.sep).filter(Boolean).length
+    const isLegacySlashFile = entry === "slash.js"
+    const isCategoryRootCommand = depth === 1
+
+    if (!isLegacySlashFile && !isCategoryRootCommand) continue
+
+    files.push(full)
+  }
+
+  return files
+}
+
+const loadCommands = () => {
+  const commandFiles = findSlashCommandFiles(base, base)
+
+  for (const commandPath of commandFiles) {
+    const file = require(commandPath)
+
+    if (!file.data || !file.data.name) continue
+    if (names.has(file.data.name)) {
+      throw new Error(`Duplicate slash name ${file.data.name}`)
+    }
+
+    if (!isCommandEnabled(file)) {
+      console.log("Skipped disabled command", file.data.name)
+      continue
+    }
+
+    names.add(file.data.name)
+    commands.push(file.data.toJSON())
+    console.log("Prepared", file.data.name)
   }
 }
 
