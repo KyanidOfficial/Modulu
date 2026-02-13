@@ -58,18 +58,6 @@ module.exports = client => {
     }
   }
 
-  const flatCommands = [
-    require("../../commands/automod"),
-    require("../../commands/case"),
-    require("../../commands/rep")
-  ]
-
-  for (const command of flatCommands) {
-    if (!command?.data?.name) continue
-    if (client.commands.has(command.data.name)) continue
-    client.commands.set(command.data.name, command)
-    registry.set(command.data.name, command)
-  }
 
   console.log("Slash loader finished", client.commands.size)
 }

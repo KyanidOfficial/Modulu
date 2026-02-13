@@ -49,11 +49,6 @@ const loadCommands = () => {
     }
   }
 
-  for (const file of flatCommands) {
-    if (names.has(file.data.name)) continue
-    names.add(file.data.name)
-    commands.push(file.data.toJSON())
-  }
 }
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
