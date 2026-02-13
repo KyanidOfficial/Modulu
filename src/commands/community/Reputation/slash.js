@@ -1,6 +1,6 @@
 const { SlashCommandBuilder, EmbedBuilder } = require("discord.js")
-const guard = require("../../core/middleware/permissionGuard")
-const reputation = require("../../modules/reputation")
+const guard = require("../../../core/middleware/permissionGuard")
+const reputation = require("../../../modules/reputation")
 
 module.exports = {
   data: new SlashCommandBuilder()
