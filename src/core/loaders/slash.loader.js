@@ -52,6 +52,7 @@ const loadSlashCommands = client => {
     console.log("Loaded slash command", command.data.name, slashPath)
   }
 
+
   console.log("Slash loader finished", client.commands.size)
 }
 
