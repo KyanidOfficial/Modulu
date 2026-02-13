@@ -3,58 +3,68 @@ const path = require("path")
 const registry = require("../registry/slash.commands")
 const { isCommandEnabled } = require("../../utils/commandToggle")
 
+const findSlashCommandFiles = (dir, base) => {
+  const files = []
+  for (const entry of fs.readdirSync(dir)) {
+    const full = path.join(dir, entry)
+    const stat = fs.statSync(full)
+
+    if (stat.isDirectory()) {
+      files.push(...findSlashCommandFiles(full, base))
+      continue
+    }
+
+    if (!entry.endsWith(".js")) continue
+    if (entry === "meta.js" || entry === "prefix.js") continue
+
+    const relativeDir = path.relative(base, path.dirname(full))
+    const depth = relativeDir.split(path.sep).filter(Boolean).length
+    const isLegacySlashFile = entry === "slash.js"
+    const isCategoryRootCommand = depth === 1
+
+    if (!isLegacySlashFile && !isCategoryRootCommand) continue
+
+    files.push(full)
+  }
+  return files
+}
+
 module.exports = client => {
   console.log("Slash loader started")
 
   const base = path.join(__dirname, "..", "..", "commands")
   if (!fs.existsSync(base)) return
 
-  for (const category of fs.readdirSync(base)) {
-    const catPath = path.join(base, category)
-    if (!fs.statSync(catPath).isDirectory()) continue
+  const commandFiles = findSlashCommandFiles(base, base)
 
-    for (const folder of fs.readdirSync(catPath)) {
-      const cmdPath = path.join(catPath, folder)
-      if (!fs.statSync(cmdPath).isDirectory()) continue
+  for (const commandPath of commandFiles) {
+    try {
+      const command = require(commandPath)
 
-      const slashPath = path.join(cmdPath, "slash.js")
-      if (!fs.existsSync(slashPath)) continue
+      if (!command) continue
+      if (!command.data || !command.data.name) continue
+      if (typeof command.execute !== "function") continue
 
-      try {
-        const command = require(slashPath)
-
-        if (!command) continue
-        if (!command.data || !command.data.name) {
-          console.error("Missing command data", slashPath)
-          continue
-        }
-
-        if (typeof command.execute !== "function") {
-          console.error("Missing execute()", command.data.name)
-          continue
-        }
-
-        if (!isCommandEnabled(command)) {
-          console.log("Skipped disabled command", command.data.name)
-          continue
-        }
-
-        if (client.commands.has(command.data.name)) {
-          console.error("Duplicate command name", command.data.name)
-          continue
-        }
-
-        const metaPath = path.join(cmdPath, "meta.js")
-        command.meta = fs.existsSync(metaPath) ? require(metaPath) : {}
-
-        registry.set(command.data.name, command)
-        client.commands.set(command.data.name, command)
-
-        console.log("Loaded slash command", command.data.name)
-      } catch (err) {
-        console.error("Failed to load command", slashPath)
-        console.error(err)
+      if (!isCommandEnabled(command)) {
+        console.log("Skipped disabled command", command.data.name)
+        continue
       }
+
+      if (client.commands.has(command.data.name)) {
+        console.error("Duplicate command name", command.data.name)
+        continue
+      }
+
+      const metaPath = path.join(path.dirname(commandPath), "meta.js")
+      command.meta = fs.existsSync(metaPath) ? require(metaPath) : {}
+
+      registry.set(command.data.name, command)
+      client.commands.set(command.data.name, command)
+
+      console.log("Loaded slash command", command.data.name)
+    } catch (err) {
+      console.error("Failed to load command", commandPath)
+      console.error(err)
     }
   }
 
