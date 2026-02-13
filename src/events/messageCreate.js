@@ -5,11 +5,7 @@ const sbDebug = require("./messages/sbDebug")
 const spamProtection = require("./messages/spamProtection")
 const giveawayTrigger = require("./messages/giveawayTrigger")
 const handleApplicationDm = require("../modules/applications/dm.handler")
-
-const log = (message, meta = {}) => {
-  const parts = Object.entries(meta).map(([k, v]) => `${k}=${v}`)
-  console.log(`[APPLICATIONS] ${message}${parts.length ? ` ${parts.join(" ")}` : ""}`)
-}
+const automod = require("../modules/automod")
 
 const isDmBasedChannel = channel =>
   Boolean(channel && typeof channel.isDMBased === "function" && channel.isDMBased())
@@ -19,12 +15,6 @@ module.exports = async (client, message) => {
   if (message.author?.bot) return
 
   const isDM = isDmBasedChannel(message.channel)
-
-  log("messageCreate event firing", {
-    userId: message.author?.id || "unknown",
-    channelType: message.channel?.type,
-    isDM
-  })
 
   // DM routing must happen before guild-only middleware.
   if (isDM) {
@@ -39,5 +29,6 @@ module.exports = async (client, message) => {
   await sbDebug(message)
   await harmfulLinks(message)
   await giveawayTrigger(message)
+  await automod.handleMessage(message)
   await prefixHandler(client, message)
 }
