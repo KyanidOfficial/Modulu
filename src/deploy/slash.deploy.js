@@ -1,15 +1,15 @@
 require("dotenv").config()
-const fs = require("fs")
 const path = require("path")
 const { REST, Routes } = require("discord.js")
 const { isCommandEnabled } = require("../utils/commandToggle")
+const { collectSlashCommandFiles } = require("../core/loaders/slash.scan")
 
 if (!process.env.TOKEN) throw new Error("Missing TOKEN")
 if (!process.env.CLIENT_ID) throw new Error("Missing CLIENT_ID")
 
 const commands = []
-const names = new Set()
-const base = path.join(__dirname, "../commands")
+const commandNameToFile = new Map()
+const base = path.resolve(__dirname, "../commands")
 
 const findSlashFiles = dir => {
   const files = []
@@ -31,24 +31,30 @@ const findSlashFiles = dir => {
 }
 
 const loadCommands = () => {
-  const slashFiles = findSlashFiles(base)
+  const slashFiles = collectSlashCommandFiles(base)
 
   for (const slashPath of slashFiles) {
     const command = require(slashPath)
-    if (!command?.data?.name) continue
+
+    if (!command || !command.data || typeof command.data.name !== "string" || !command.data.name.trim()) {
+      throw new Error(`Invalid slash export in ${slashPath}: expected data.name`)
+    }
 
     if (!isCommandEnabled(command)) {
       console.log("Skipped disabled command", command.data.name)
       continue
     }
 
-    if (names.has(command.data.name)) {
-      throw new Error(`Duplicate slash name ${command.data.name}`)
+    if (commandNameToFile.has(command.data.name)) {
+      const firstPath = commandNameToFile.get(command.data.name)
+      throw new Error(
+        `Duplicate slash name ${command.data.name}\nfirst: ${firstPath}\nsecond: ${slashPath}`
+      )
     }
 
-    names.add(command.data.name)
+    commandNameToFile.set(command.data.name, slashPath)
     commands.push(command.data.toJSON())
-    console.log("Prepared", command.data.name)
+    console.log("Prepared", command.data.name, slashPath)
   }
 
 }
