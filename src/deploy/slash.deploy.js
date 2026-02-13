@@ -11,6 +11,12 @@ const commands = []
 const names = new Set()
 const base = path.join(__dirname, "../commands")
 
+const flatCommands = [
+  require("../commands/automod"),
+  require("../commands/case"),
+  require("../commands/rep")
+]
+
 const loadCommands = () => {
   for (const category of fs.readdirSync(base)) {
     const catPath = path.join(base, category)
