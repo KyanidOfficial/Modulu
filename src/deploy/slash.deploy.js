@@ -11,36 +11,44 @@ const commands = []
 const names = new Set()
 const base = path.join(__dirname, "../commands")
 
-const loadCommands = () => {
-  for (const category of fs.readdirSync(base)) {
-    const catPath = path.join(base, category)
-    if (!fs.statSync(catPath).isDirectory()) continue
+const findSlashFiles = dir => {
+  const files = []
 
-    for (const folder of fs.readdirSync(catPath)) {
-      const cmdPath = path.join(catPath, folder)
-      if (!fs.statSync(cmdPath).isDirectory()) continue
+  for (const entry of fs.readdirSync(dir)) {
+    const fullPath = path.join(dir, entry)
+    const stat = fs.statSync(fullPath)
 
-      const slashPath = path.join(cmdPath, "slash.js")
-      if (!fs.existsSync(slashPath)) continue
-
-      const file = require(slashPath)
-
-      if (!file.data || !file.data.name) {
-        throw new Error(`Missing data for ${slashPath}`)
-      }
-      if (names.has(file.data.name)) {
-        throw new Error(`Duplicate slash name ${file.data.name}`)
-      }
-
-      if (!isCommandEnabled(file)) {
-        console.log("Skipped disabled command", file.data.name)
-        continue
-      }
-
-      names.add(file.data.name)
-      commands.push(file.data.toJSON())
-      console.log("Prepared", file.data.name)
+    if (stat.isDirectory()) {
+      files.push(...findSlashFiles(fullPath))
+      continue
     }
+
+    if (entry !== "slash.js") continue
+    files.push(fullPath)
+  }
+
+  return files
+}
+
+const loadCommands = () => {
+  const slashFiles = findSlashFiles(base)
+
+  for (const slashPath of slashFiles) {
+    const command = require(slashPath)
+    if (!command?.data?.name) continue
+
+    if (!isCommandEnabled(command)) {
+      console.log("Skipped disabled command", command.data.name)
+      continue
+    }
+
+    if (names.has(command.data.name)) {
+      throw new Error(`Duplicate slash name ${command.data.name}`)
+    }
+
+    names.add(command.data.name)
+    commands.push(command.data.toJSON())
+    console.log("Prepared", command.data.name)
   }
 }
 
@@ -49,18 +57,16 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
 ;(async () => {
   try {
     loadCommands()
-
     console.log("Deploying", commands.length, "commands")
 
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    )
+    await rest.put(Routes.applicationCommands(process.env.CLIENT_ID), {
+      body: commands
+    })
 
     console.log("Deploy successful")
-  } catch (err) {
+  } catch (error) {
     console.error("Deploy failed")
-    console.error(err)
+    console.error(error)
     process.exitCode = 1
   }
 })()
