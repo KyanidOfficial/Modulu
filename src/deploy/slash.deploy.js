@@ -11,6 +11,12 @@ const commands = []
 const names = new Set()
 const base = path.join(__dirname, "../commands")
 
+const flatCommands = [
+  require("../commands/automod"),
+  require("../commands/case"),
+  require("../commands/rep")
+]
+
 const loadCommands = () => {
   for (const category of fs.readdirSync(base)) {
     const catPath = path.join(base, category)
@@ -41,6 +47,12 @@ const loadCommands = () => {
       commands.push(file.data.toJSON())
       console.log("Prepared", file.data.name)
     }
+  }
+
+  for (const file of flatCommands) {
+    if (names.has(file.data.name)) continue
+    names.add(file.data.name)
+    commands.push(file.data.toJSON())
   }
 }
 
