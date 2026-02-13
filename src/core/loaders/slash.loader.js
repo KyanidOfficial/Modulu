@@ -68,5 +68,6 @@ module.exports = client => {
     }
   }
 
+
   console.log("Slash loader finished", client.commands.size)
 }
