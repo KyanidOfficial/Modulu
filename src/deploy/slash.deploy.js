@@ -50,6 +50,7 @@ const loadCommands = () => {
     commands.push(command.data.toJSON())
     console.log("Prepared", command.data.name)
   }
+
 }
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
