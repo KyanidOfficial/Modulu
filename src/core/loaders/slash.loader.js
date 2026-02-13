@@ -4,8 +4,8 @@ const registry = require("../registry/slash.commands")
 const { isCommandEnabled } = require("../../utils/commandToggle")
 const { collectSlashCommandFiles } = require("./slash.scan")
 
-module.exports = client => {
-  console.log("Slash loader started")
+const findSlashFiles = dir => {
+  const files = []
 
   const base = path.resolve(__dirname, "..", "..", "commands")
   if (!fs.existsSync(base)) return
@@ -51,6 +51,7 @@ module.exports = client => {
     client.commands.set(command.data.name, command)
     console.log("Loaded slash command", command.data.name, slashPath)
   }
+
 
   console.log("Slash loader finished", client.commands.size)
 }

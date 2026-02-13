@@ -11,6 +11,25 @@ const commands = []
 const commandNameToFile = new Map()
 const base = path.resolve(__dirname, "../commands")
 
+const findSlashFiles = dir => {
+  const files = []
+
+  for (const entry of fs.readdirSync(dir)) {
+    const fullPath = path.join(dir, entry)
+    const stat = fs.statSync(fullPath)
+
+    if (stat.isDirectory()) {
+      files.push(...findSlashFiles(fullPath))
+      continue
+    }
+
+    if (entry !== "slash.js") continue
+    files.push(fullPath)
+  }
+
+  return files
+}
+
 const loadCommands = () => {
   const slashFiles = collectSlashCommandFiles(base)
 
@@ -37,6 +56,7 @@ const loadCommands = () => {
     commands.push(command.data.toJSON())
     console.log("Prepared", command.data.name, slashPath)
   }
+
 }
 
 const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
