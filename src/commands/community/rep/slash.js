@@ -24,7 +24,7 @@ module.exports = {
     if (sub === "view") {
       const user = interaction.options.getUser("user", true)
       const rep = await reputation.view(guildId, user.id)
-      await interaction.reply({ content: `${user.tag} reputation: ${rep.score}` })
+      await interaction.editReply({ content: `${user.tag} reputation: ${rep.score}` })
       return
     }
 
@@ -32,12 +32,12 @@ module.exports = {
       const page = interaction.options.getInteger("page") || 1
       const rows = await reputation.leaderboard(guildId, page, 10)
       const desc = rows.map((r, i) => `${i + 1}. <@${r.user_id}> — ${r.score}`).join("\n") || "No data"
-      await interaction.reply({ embeds: [new EmbedBuilder().setTitle("Reputation Leaderboard").setDescription(desc)] })
+      await interaction.editReply({ embeds: [new EmbedBuilder().setTitle("Reputation Leaderboard").setDescription(desc)] })
       return
     }
 
     if (!guard.require(interaction, ["ManageGuild"])) {
-      await interaction.reply({ content: "Missing permission", ephemeral: true })
+      await interaction.editReply({ content: "Missing permission", ephemeral: true })
       return
     }
 
@@ -45,6 +45,6 @@ module.exports = {
     const value = interaction.options.getInteger("value", true)
     const reason = interaction.options.getString("reason", true)
     await reputation.adjust(guildId, user.id, value, interaction.user.id, reason)
-    await interaction.reply(`Adjusted ${user.tag} by ${value}`)
+    await interaction.editReply(`Adjusted ${user.tag} by ${value}`)
   }
 }

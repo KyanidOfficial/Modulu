@@ -1,6 +1,6 @@
 const db = require("../../core/database")
 const logger = require("../../core/observability/logger")
-const errorHandler = require("../../core/observability/errorHandler")
+const { report } = require("../../core/observability/errorHandler")
 
 module.exports = {
   async applyImpact({ guildId, userId, delta, sourceType, caseId, metadata }) {
@@ -8,7 +8,7 @@ module.exports = {
       await db.applyReputationDelta({ guildId, userId, delta, sourceType, caseId, metadata })
       logger.info("reputation.updated", { guildId, userId, delta, sourceType, caseId })
     } catch (error) {
-      await errorHandler({ error, context: { module: "reputation.applyImpact", guildId, userId } })
+      await report({ error, context: { module: "reputation.applyImpact", guildId, userId } })
     }
   },
 

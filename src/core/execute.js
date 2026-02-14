@@ -1,19 +1,29 @@
 const errorEmbed = require("../messages/embeds/error.embed")
+const { handleInteractionError } = require("./observability/errorHandler")
 
 module.exports = async (interaction, cmd) => {
   try {
-    await cmd.execute(interaction)
-  } catch (err) {
-    console.error(err)
-
-    const payload = {
-      embeds: [errorEmbed("Command failed.")]
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.deferReply({ ephemeral: true })
     }
 
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply(payload)
-    } else {
-      await interaction.reply(payload)
+    await cmd.execute(interaction)
+  } catch (error) {
+    await handleInteractionError({ error, interaction })
+
+    if (!interaction.deferred && !interaction.replied) {
+      try {
+        await interaction.reply({ embeds: [errorEmbed("Command failed.")], ephemeral: true })
+      } catch {
+        return
+      }
+      return
+    }
+
+    try {
+      await interaction.editReply({ embeds: [errorEmbed("Command failed.")] })
+    } catch {
+      return
     }
   }
 }

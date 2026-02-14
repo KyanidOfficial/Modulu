@@ -1,5 +1,5 @@
 const db = require("../../core/database")
-const errorHandler = require("../../core/observability/errorHandler")
+const { report } = require("../../core/observability/errorHandler")
 const logger = require("../../core/observability/logger")
 const slidingWindow = require("./slidingWindow")
 const ruleEngine = require("./ruleEngine")
@@ -87,7 +87,7 @@ module.exports = {
         actionType: decision.actionType
       })
     } catch (error) {
-      await errorHandler({
+      await report({
         error,
         context: {
           module: "automod",

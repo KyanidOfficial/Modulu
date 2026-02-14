@@ -19,7 +19,7 @@ module.exports = {
 
   async execute(interaction) {
     if (!guard.require(interaction, ["ManageGuild"])) {
-      await interaction.reply({ content: "Missing permission", ephemeral: true })
+      await interaction.editReply({ content: "Missing permission", ephemeral: true })
       return
     }
 
@@ -29,14 +29,14 @@ module.exports = {
     if (sub === "enable") {
       const config = await db.getAutomodConfig(guildId)
       await db.setAutomodConfig(guildId, { ...config, enabled: true })
-      await interaction.reply("Automod enabled")
+      await interaction.editReply("Automod enabled")
       return
     }
 
     if (sub === "disable") {
       const config = await db.getAutomodConfig(guildId)
       await db.setAutomodConfig(guildId, { ...config, enabled: false })
-      await interaction.reply("Automod disabled")
+      await interaction.editReply("Automod disabled")
       return
     }
 
@@ -48,11 +48,11 @@ module.exports = {
       const parsed = Number.isNaN(num) ? value : num
       const next = { ...config, thresholds: { ...config.thresholds, [key]: parsed } }
       await db.setAutomodConfig(guildId, next)
-      await interaction.reply(`Updated ${key}`)
+      await interaction.editReply(`Updated ${key}`)
       return
     }
 
     const config = await db.getAutomodConfig(guildId)
-    await interaction.reply({ content: `\`${JSON.stringify(config, null, 2)}\``, ephemeral: true })
+    await interaction.editReply({ content: `\`${JSON.stringify(config, null, 2)}\``, ephemeral: true })
   }
 }
