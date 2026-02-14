@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 const eventLoader = require("./core/loaders/event.loader")
 const slashLoaderImport = require("./core/loaders/slash.loader")
 const prefixLoader = require("./core/loaders/prefix.loader")
@@ -11,26 +12,25 @@ const slashLoader =
       : typeof slashLoaderImport?.default === "function"
         ? slashLoaderImport.default
         : null
+=======
+const logger = require("./bootstrap/logger")
+const slashLoader = require("./core/loaders/slash.loader")
+const interactionHandler = require("./core/handlers/interaction.handler")
+const messageHandler = require("./core/handlers/message.handler")
+>>>>>>> 2e7d33e5677ccf14a038d3f94d24e5c1b03f782e
 
 module.exports = client => {
-  try {
-    eventLoader(client)
-  } catch (error) {
-    handleClientError({ error, event: "bootstrap.eventLoader" })
-  }
+  slashLoader(client)
 
-  try {
-    if (typeof slashLoader !== "function") {
-      throw new TypeError("slashLoader is not a function")
-    }
-    slashLoader(client)
-  } catch (error) {
-    handleClientError({ error, event: "bootstrap.slashLoader" })
-  }
+  client.on("clientReady", readyClient => {
+    logger.info("client.ready", { tag: readyClient.user.tag })
+  })
 
-  try {
-    prefixLoader(client)
-  } catch (error) {
-    handleClientError({ error, event: "bootstrap.prefixLoader" })
-  }
+  client.on("interactionCreate", async interaction => {
+    await interactionHandler(client, interaction)
+  })
+
+  client.on("messageCreate", async message => {
+    await messageHandler(message)
+  })
 }

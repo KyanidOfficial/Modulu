@@ -1,15 +1,14 @@
-const execute = require("../execute")
-const { handleInteractionError } = require("../observability/errorHandler")
+const execute = require("./execute")
+const rateLimit = require("../../middleware/rateLimiter")
 
 module.exports = async (client, interaction) => {
   if (!interaction.isChatInputCommand()) return
 
-  const cmd = client.commands.get(interaction.commandName)
-  if (!cmd) return
+  const allowed = rateLimit({ key: `${interaction.user.id}:${interaction.commandName}` })
+  if (!allowed) return
 
-  try {
-    await execute(interaction, cmd)
-  } catch (error) {
-    await handleInteractionError({ error, interaction })
-  }
+  const command = client.commands.get(interaction.commandName)
+  if (!command) return
+
+  await execute(interaction, command)
 }

@@ -1,9 +1,4 @@
-const { EmbedBuilder } = require("discord.js")
-const COLORS = require("../../utils/colors")
-const { EMOJIS } = require("../../utils/constants")
+const base = require("./base.embed")
+const { EMBED_COLORS } = require("../../utils/constants")
 
-module.exports = message =>
-  new EmbedBuilder()
-    .setTitle(`Success!`)
-    .setColor(COLORS.success)
-    .setDescription(message)
+module.exports = description => base({ title: "Success", description, color: EMBED_COLORS.success })

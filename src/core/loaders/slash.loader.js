@@ -1,61 +1,52 @@
 const fs = require("fs")
 const path = require("path")
-const registry = require("../registry/slash.commands")
-const { isCommandEnabled } = require("../../utils/commandToggle")
-const { collectSlashCommandFiles } = require("./slash.scan")
+const logger = require("../../bootstrap/logger")
 
-const loadSlashCommands = client => {
-  console.log("Slash loader started")
+const readSorted = dir => fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))
 
-  const base = path.resolve(__dirname, "..", "..", "commands")
-  if (!fs.existsSync(base)) return
+const collect = root => {
+  const files = []
+  const walk = dir => {
+    for (const entry of readSorted(dir)) {
+      const full = path.join(dir, entry.name)
+      if (entry.isDirectory()) {
+        walk(full)
+      } else if (entry.isFile() && entry.name === "slash.js") {
+        files.push(full)
+      }
+    }
+  }
+  walk(root)
+  return files
+}
 
-  const slashFiles = collectSlashCommandFiles(base)
-  const commandNameToFile = new Map()
+module.exports = client => {
+  const root = path.resolve(__dirname, "..", "..", "commands")
+  const slashFiles = collect(root)
+  const loaded = new Set()
 
   for (const slashPath of slashFiles) {
     const command = require(slashPath)
+    const metaPath = path.join(path.dirname(slashPath), "meta.js")
+    const meta = fs.existsSync(metaPath) ? require(metaPath) : {}
 
-    if (!command || !command.data || typeof command.data.name !== "string" || !command.data.name.trim()) {
-      throw new Error(`Invalid slash export in ${slashPath}: expected data.name`)
-    }
-
-    if (typeof command.execute !== "function") {
-      throw new Error(`Invalid slash export in ${slashPath}: expected execute()`)
-    }
-
-    if (!isCommandEnabled(command)) {
-      console.log("Skipped disabled command", command.data.name)
+    const name = command?.data?.name
+    if (!name) {
+      logger.warn("slash.invalid", { slashPath })
       continue
     }
 
-    if (commandNameToFile.has(command.data.name)) {
-      const firstPath = commandNameToFile.get(command.data.name)
-      throw new Error(
-        `Duplicate slash name ${command.data.name}\nfirst: ${firstPath}\nsecond: ${slashPath}`
-      )
+    if (loaded.has(name)) {
+      const previous = client.commands.get(name)?.__file
+      logger.error("slash.duplicate", { name, previous, conflict: slashPath })
+      continue
     }
 
-    const metaPath = path.resolve(path.dirname(slashPath), "meta.js")
-    let meta = {}
-    if (fs.existsSync(metaPath)) {
-      meta = require(metaPath)
-      if (meta && (Object.prototype.hasOwnProperty.call(meta, "data") || Object.prototype.hasOwnProperty.call(meta, "execute"))) {
-        throw new Error(`Invalid meta export in ${metaPath}: meta.js must not export command handlers`)
-      }
-    }
-
+    loaded.add(name)
     command.meta = meta
-    commandNameToFile.set(command.data.name, slashPath)
-    registry.set(command.data.name, command)
-    client.commands.set(command.data.name, command)
-    console.log("Loaded slash command", command.data.name, slashPath)
+    command.__file = slashPath
+    client.commands.set(name, command)
   }
 
-
-  console.log("Slash loader finished", client.commands.size)
+  logger.info("slash.loaded", { count: client.commands.size })
 }
-
-module.exports = loadSlashCommands
-module.exports.loadSlashCommands = loadSlashCommands
-module.exports.default = loadSlashCommands
