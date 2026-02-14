@@ -1,10 +1,11 @@
 module.exports = {
-  EMBED_COLORS: {
-    success: 0x57f287,
-    error: 0xed4245,
-    info: 0x5865f2,
-    moderation: 0xffa500,
-    reputation: 0x00bcd4,
-    automod: 0xff6b6b
+    EMOJIS: {
+        ERROR: "<:error:1455124640690339890>",
+        SUCCESS: "<:success:1455124639373066342>",
+        WARN: "<:warning:1455124637246558409>",
+        UPDATE: "<:update:1455124629009072283>",
+        DEV: "<:developer:1455124626911924255>",
+        INFO: "<:information:1455124625510891662>",
+
   }
 }

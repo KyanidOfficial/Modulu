@@ -4,92 +4,42 @@ const dmEmbed = require("../../messages/embeds/dmPunishment.embed")
 const logAction = require("../../utils/logAction")
 const logEmbed = require("../../messages/embeds/log.embed")
 const COLORS = require("../../utils/colors")
-const { report } = require("../observability/errorHandler")
-const {
-  Permissions,
-  ensureBotPermissions,
-  ensureModeratable
-} = require("../moderation/permissionGuard")
 
 const actionCooldown = new Map()
 const COOLDOWN_MS = 10_000
 
 module.exports.handle = async ({ member, type }) => {
-  try {
-    const guild = member.guild
-    const guildId = guild.id
-    const userId = member.id
-    const key = `${guildId}:${userId}`
+  const guild = member.guild
+  const guildId = guild.id
+  const userId = member.id
+  const key = `${guildId}:${userId}`
 
-    const now = Date.now()
-    const last = actionCooldown.get(key)
+  const now = Date.now()
+  const last = actionCooldown.get(key)
 
-    if (last && now - last < COOLDOWN_MS) {
-      return
-    }
+  if (last && now - last < COOLDOWN_MS) {
+    return
+  }
 
-    actionCooldown.set(key, now)
+  actionCooldown.set(key, now)
 
-    await db.incrementViolation({
-      guildId,
-      userId,
-      type
-    })
+  await db.incrementViolation({
+    guildId,
+    userId,
+    type
+  })
 
-    const v = await db.getViolation(guildId, userId, type)
-    const count = v?.count || 1
+  const v = await db.getViolation(guildId, userId, type)
+  const count = v?.count || 1
 
-    if (count === 1) {
-      await logAction(
-        guild,
-        logEmbed({
-          punishment: "warning",
-          user: `<@${userId}>`,
-          moderator: "AutoMod",
-          reason: `Spam detected (${type})`,
-          color: COLORS.warning
-        })
-      )
-
-      await dmUser(
-        guildId,
-        member.user,
-        dmEmbed({
-          punishment: "warning",
-          reason: `Spam detected (${type})`,
-          guild: guild.name,
-          color: COLORS.warning
-        })
-      )
-
-      return
-    }
-
-    const botPermissionCheck = ensureBotPermissions({
-      guild,
-      targetMember: member,
-      requiredPermission: Permissions.ModerateMembers,
-      action: "timeout"
-    })
-    if (!botPermissionCheck.ok) return
-
-    const moderatableCheck = ensureModeratable({ targetMember: member, action: "timeout" })
-    if (!moderatableCheck.ok) return
-
-    const durationMs = count === 2 ? 60_000 : 300_000
-    const expiresAt = Math.floor((Date.now() + durationMs) / 1000)
-
-    await member.timeout(durationMs, "Spam")
-
+  if (count === 1) {
     await logAction(
       guild,
       logEmbed({
-        punishment: "timeout",
+        punishment: "warning",
         user: `<@${userId}>`,
         moderator: "AutoMod",
-        reason: `Repeated spam (${type})`,
-        duration: count === 2 ? "1 minute" : "5 minutes",
-        expiresAt,
+        reason: `Spam detected (${type})`,
         color: COLORS.warning
       })
     )
@@ -98,17 +48,45 @@ module.exports.handle = async ({ member, type }) => {
       guildId,
       member.user,
       dmEmbed({
-        punishment: "timeout",
-        expiresAt,
-        reason: `Repeated spam (${type})`,
+        punishment: "warning",
+        reason: `Spam detected (${type})`,
         guild: guild.name,
         color: COLORS.warning
       })
     )
 
-    return "timeout"
-  } catch (error) {
-    await report({ error, context: { module: "spam.escalation", userId: member?.id, guildId: member?.guild?.id } })
-    return null
+    return
   }
+
+  const durationMs = count === 2 ? 60_000 : 300_000
+  const expiresAt = Math.floor((Date.now() + durationMs) / 1000)
+
+  await member.timeout(durationMs, "Spam")
+
+  await logAction(
+    guild,
+    logEmbed({
+      punishment: "timeout",
+      user: `<@${userId}>`,
+      moderator: "AutoMod",
+      reason: `Repeated spam (${type})`,
+      duration: count === 2 ? "1 minute" : "5 minutes",
+      expiresAt,
+      color: COLORS.warning
+    })
+  )
+
+  await dmUser(
+    guildId,
+    member.user,
+    dmEmbed({
+      punishment: "timeout",
+      expiresAt,
+      reason: `Repeated spam (${type})`,
+      guild: guild.name,
+      color: COLORS.warning
+    })
+  )
+
+  return "timeout"
 }

@@ -1,6 +1,5 @@
 const fs = require("fs")
 const path = require("path")
-const { handleClientError } = require("../observability/errorHandler")
 
 module.exports = client => {
   const base = path.join(__dirname, "..", "..", "events")
@@ -19,17 +18,7 @@ module.exports = client => {
       const event = require(full)
       const name = file.split(".")[0]
 
-      client.on(name, async (...args) => {
-        try {
-          await event(client, ...args)
-        } catch (error) {
-          handleClientError({
-            error,
-            event: `event.${name}`,
-            context: { file: full }
-          })
-        }
-      })
+      client.on(name, (...args) => event(client, ...args))
     }
   }
 
