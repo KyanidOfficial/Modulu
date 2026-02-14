@@ -5,6 +5,7 @@ const sbDebug = require("./messages/sbDebug")
 const spamProtection = require("./messages/spamProtection")
 const giveawayTrigger = require("./messages/giveawayTrigger")
 const handleApplicationDm = require("../modules/applications/dm.handler")
+const automod = require("../modules/automod/service")
 
 const log = (message, meta = {}) => {
   const parts = Object.entries(meta).map(([k, v]) => `${k}=${v}`)
@@ -34,6 +35,9 @@ module.exports = async (client, message) => {
   }
 
   if (!message.content && message.attachments.size === 0) return
+
+  const automodResult = await automod.handleMessage(message)
+  if (automodResult?.blocked) return
 
   await spamProtection(message)
   await sbDebug(message)

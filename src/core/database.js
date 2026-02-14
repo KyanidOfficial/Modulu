@@ -10,6 +10,7 @@ const pool = mysql.createPool({
 })
 
 let moderationLogsReady = false
+let automodTablesReady = false
 
 const ensureModerationLogsTable = async () => {
   if (moderationLogsReady) return
@@ -30,6 +31,49 @@ const ensureModerationLogsTable = async () => {
   )
 
   moderationLogsReady = true
+}
+
+const ensureAutomodTables = async () => {
+  if (automodTablesReady) return
+
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS automod_configs (
+      guild_id VARCHAR(32) PRIMARY KEY,
+      config_json JSON NOT NULL,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )
+    `
+  )
+
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS automod_infractions (
+      id BIGINT AUTO_INCREMENT PRIMARY KEY,
+      guild_id VARCHAR(32) NOT NULL,
+      user_id VARCHAR(32) NOT NULL,
+      trigger_type VARCHAR(64) NOT NULL,
+      reason TEXT NULL,
+      metadata JSON NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      INDEX idx_automod_infraction_lookup (guild_id, user_id, trigger_type, created_at)
+    )
+    `
+  )
+
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS automod_cooldowns (
+      guild_id VARCHAR(32) NOT NULL,
+      user_id VARCHAR(32) NOT NULL,
+      trigger_type VARCHAR(64) NOT NULL,
+      expires_at TIMESTAMP NOT NULL,
+      PRIMARY KEY (guild_id, user_id, trigger_type)
+    )
+    `
+  )
+
+  automodTablesReady = true
 }
 
 module.exports = {
@@ -196,5 +240,84 @@ module.exports = {
       ]
     )
     return result.insertId
+  },
+
+  async getAutomodConfig(guildId) {
+    await ensureAutomodTables()
+    const [rows] = await pool.query(
+      "SELECT config_json FROM automod_configs WHERE guild_id = ?",
+      [guildId]
+    )
+    if (!rows.length) return null
+    return rows[0].config_json
+  },
+
+  async saveAutomodConfig(guildId, config) {
+    await ensureAutomodTables()
+    await pool.query(
+      `
+      INSERT INTO automod_configs (guild_id, config_json)
+      VALUES (?, ?)
+      ON DUPLICATE KEY UPDATE config_json = VALUES(config_json)
+      `,
+      [guildId, JSON.stringify(config)]
+    )
+  },
+
+  async addAutomodInfraction({ guildId, userId, triggerType, reason, metadata }) {
+    await ensureAutomodTables()
+    await pool.query(
+      `
+      INSERT INTO automod_infractions
+        (guild_id, user_id, trigger_type, reason, metadata)
+      VALUES (?, ?, ?, ?, ?)
+      `,
+      [guildId, userId, triggerType, reason || null, metadata ? JSON.stringify(metadata) : null]
+    )
+  },
+
+  async countAutomodInfractions(guildId, userId, triggerType, withinMinutes = 1440) {
+    await ensureAutomodTables()
+    const [rows] = await pool.query(
+      `
+      SELECT COUNT(*) AS count
+      FROM automod_infractions
+      WHERE guild_id = ?
+        AND user_id = ?
+        AND trigger_type = ?
+        AND created_at >= NOW() - INTERVAL ? MINUTE
+      `,
+      [guildId, userId, triggerType, withinMinutes]
+    )
+    return rows[0].count || 0
+  },
+
+  async isAutomodCooldownActive(guildId, userId, triggerType) {
+    await ensureAutomodTables()
+    const [rows] = await pool.query(
+      `
+      SELECT 1 AS active
+      FROM automod_cooldowns
+      WHERE guild_id = ?
+        AND user_id = ?
+        AND trigger_type = ?
+        AND expires_at > NOW()
+      `,
+      [guildId, userId, triggerType]
+    )
+    return rows.length > 0
+  },
+
+  async setAutomodCooldown(guildId, userId, triggerType, cooldownMs) {
+    await ensureAutomodTables()
+    const seconds = Math.max(1, Math.floor(cooldownMs / 1000))
+    await pool.query(
+      `
+      INSERT INTO automod_cooldowns (guild_id, user_id, trigger_type, expires_at)
+      VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND))
+      ON DUPLICATE KEY UPDATE expires_at = VALUES(expires_at)
+      `,
+      [guildId, userId, triggerType, seconds]
+    )
   }
 }
