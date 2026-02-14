@@ -1,6 +1,9 @@
 const { SlashCommandBuilder } = require("discord.js")
-const db = require("../../../core/database")
-const guard = require("../../../core/middleware/permissionGuard")
+const guard = require("../../../middleware/permission.guard")
+const safeReply = require("../../../utils/safeReply")
+const error = require("../../../messages/embeds/error.embed")
+const automodEmbed = require("../../../messages/embeds/automod.embed")
+const automodService = require("../../../services/moderation/automod.service")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -8,51 +11,29 @@ module.exports = {
     .setDescription("Manage automod")
     .addSubcommand(s => s.setName("enable").setDescription("Enable automod"))
     .addSubcommand(s => s.setName("disable").setDescription("Disable automod"))
-    .addSubcommand(s =>
-      s
-        .setName("config-set")
-        .setDescription("Set automod config")
-        .addStringOption(o => o.setName("key").setDescription("threshold key").setRequired(true))
-        .addStringOption(o => o.setName("value").setDescription("value").setRequired(true))
-    )
-    .addSubcommand(s => s.setName("config-view").setDescription("View automod config")),
-
+    .addSubcommand(s => s.setName("config-set").setDescription("Set threshold").addStringOption(o => o.setName("key").setDescription("Key").setRequired(true)).addStringOption(o => o.setName("value").setDescription("Value").setRequired(true)))
+    .addSubcommand(s => s.setName("config-view").setDescription("View config")),
   async execute(interaction) {
-    if (!guard.require(interaction, ["ManageGuild"])) {
-      await interaction.editReply({ content: "Missing permission", ephemeral: true })
-      return
-    }
+    const check = guard.manageGuild(interaction)
+    if (!check.ok) return safeReply(interaction, { embeds: [error(check.reason)] })
 
-    const guildId = interaction.guildId
     const sub = interaction.options.getSubcommand()
-
     if (sub === "enable") {
-      const config = await db.getAutomodConfig(guildId)
-      await db.setAutomodConfig(guildId, { ...config, enabled: true })
-      await interaction.editReply("Automod enabled")
-      return
+      await automodService.toggle(interaction.guildId, true)
+      return safeReply(interaction, { embeds: [automodEmbed("Enabled")] })
     }
-
     if (sub === "disable") {
-      const config = await db.getAutomodConfig(guildId)
-      await db.setAutomodConfig(guildId, { ...config, enabled: false })
-      await interaction.editReply("Automod disabled")
-      return
+      await automodService.toggle(interaction.guildId, false)
+      return safeReply(interaction, { embeds: [automodEmbed("Disabled")] })
     }
-
     if (sub === "config-set") {
       const key = interaction.options.getString("key", true)
       const value = interaction.options.getString("value", true)
-      const config = await db.getAutomodConfig(guildId)
-      const num = Number(value)
-      const parsed = Number.isNaN(num) ? value : num
-      const next = { ...config, thresholds: { ...config.thresholds, [key]: parsed } }
-      await db.setAutomodConfig(guildId, next)
-      await interaction.editReply(`Updated ${key}`)
-      return
+      await automodService.setThreshold(interaction.guildId, key, value)
+      return safeReply(interaction, { embeds: [automodEmbed(`Updated ${key}`)] })
     }
 
-    const config = await db.getAutomodConfig(guildId)
-    await interaction.editReply({ content: `\`${JSON.stringify(config, null, 2)}\``, ephemeral: true })
+    const config = await automodService.getConfig(interaction.guildId)
+    return safeReply(interaction, { embeds: [automodEmbed(`\`${JSON.stringify(config)}\``)] })
   }
 }

@@ -1,62 +1,42 @@
 require("dotenv").config()
 
-const { handleClientError } = require("./core/observability/errorHandler")
+const client = require("./bootstrap/client")
+const logger = require("./bootstrap/logger")
+const bootstrap = require("./bootstrap")
+const decayJob = require("./jobs/reputation/decay.job")
+const rewardJob = require("./jobs/reputation/reward.job")
 
-const bindProcessGuards = () => {
-  process.on("unhandledRejection", error => {
-    handleClientError({ error, event: "unhandledRejection" })
-  })
-
-  process.on("uncaughtException", error => {
-    handleClientError({ error, event: "uncaughtException" })
-  })
-}
-
-const bindClientGuards = client => {
-  client.on("error", error => {
-    handleClientError({ error, event: "client.error" })
-  })
-
-  client.on("shardError", error => {
-    handleClientError({ error, event: "client.shardError" })
-  })
-}
-
-const safeInterval = (fn, intervalMs, eventName) => {
+const safeInterval = (job, interval, event) => {
   setInterval(async () => {
     try {
-      await fn()
+      await job()
     } catch (error) {
-      handleClientError({ error, event: eventName })
+      logger.error(event, { message: error.message, stack: error.stack })
     }
-  }, intervalMs)
+  }, interval)
 }
 
-require("./core/workers/violationCleanup")()
-require("./core/workers/spamCleanup")()
-
-const client = require("./client")
-const reputationDecayJob = require("./jobs/reputationDecay")
-const cleanRewardJob = require("./jobs/cleanReward")
-
-bindProcessGuards()
-bindClientGuards(client)
-
-require("./bootstrap")(client)
-require("./core/loops/staffTime.loop")(client)
-
-client.login(process.env.TOKEN).catch(error => {
-  handleClientError({ error, event: "client.login" })
+process.on("unhandledRejection", error => {
+  logger.error("process.unhandledRejection", { message: error?.message, stack: error?.stack })
 })
 
-safeInterval(
-  () => reputationDecayJob(),
-  Number(process.env.REPUTATION_DECAY_INTERVAL_MS || 3600000),
-  "jobs.reputationDecay"
-)
+process.on("uncaughtException", error => {
+  logger.error("process.uncaughtException", { message: error?.message, stack: error?.stack })
+})
 
-safeInterval(
-  () => cleanRewardJob(),
-  Number(process.env.CLEAN_REWARD_INTERVAL_MS || 3600000),
-  "jobs.cleanReward"
-)
+client.on("error", error => {
+  logger.error("client.error", { message: error?.message, stack: error?.stack })
+})
+
+client.on("shardError", error => {
+  logger.error("client.shardError", { message: error?.message, stack: error?.stack })
+})
+
+bootstrap(client)
+
+client.login(process.env.TOKEN).catch(error => {
+  logger.error("client.login", { message: error?.message, stack: error?.stack })
+})
+
+safeInterval(decayJob, Number(process.env.REPUTATION_DECAY_INTERVAL_MS || 3600000), "job.reputation.decay")
+safeInterval(rewardJob, Number(process.env.CLEAN_REWARD_INTERVAL_MS || 3600000), "job.reputation.reward")
