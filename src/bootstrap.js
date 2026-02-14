@@ -12,15 +12,6 @@ const slashLoader =
         ? slashLoaderImport.default
         : null
 
-const slashLoader =
-  typeof slashLoaderImport === "function"
-    ? slashLoaderImport
-    : typeof slashLoaderImport?.loadSlashCommands === "function"
-      ? slashLoaderImport.loadSlashCommands
-      : typeof slashLoaderImport?.default === "function"
-        ? slashLoaderImport.default
-        : null
-
 module.exports = client => {
   try {
     eventLoader(client)
