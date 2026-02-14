@@ -1,5 +1,5 @@
 const db = require("../core/database")
-const errorHandler = require("../core/observability/errorHandler")
+const { report } = require("../core/observability/errorHandler")
 
 module.exports = async ({ batchSize = 100, decayPoints = 1 } = {}) => {
   let cursor = 0
@@ -9,7 +9,7 @@ module.exports = async ({ batchSize = 100, decayPoints = 1 } = {}) => {
       if (!rows.length || !nextCursor) break
       cursor = nextCursor
     } catch (error) {
-      await errorHandler({ error, context: { job: "reputationDecay", cursor } })
+      await report({ error, context: { job: "reputationDecay", cursor } })
       break
     }
   }

@@ -18,7 +18,7 @@ module.exports = {
 
   async execute(interaction) {
     if (!guard.require(interaction, ["ModerateMembers"])) {
-      await interaction.reply({ content: "Missing permission", ephemeral: true })
+      await interaction.editReply({ content: "Missing permission", ephemeral: true })
       return
     }
 
@@ -29,10 +29,10 @@ module.exports = {
       const id = interaction.options.getInteger("id", true)
       const row = await db.getCaseById(guildId, id)
       if (!row) {
-        await interaction.reply({ content: "Case not found", ephemeral: true })
+        await interaction.editReply({ content: "Case not found", ephemeral: true })
         return
       }
-      await interaction.reply({ embeds: [viewer.caseEmbed(row)] })
+      await interaction.editReply({ embeds: [viewer.caseEmbed(row)] })
       return
     }
 
@@ -41,6 +41,6 @@ module.exports = {
     const pageSize = 5
     const rows = await db.getCaseHistory(guildId, user.id, pageSize, (page - 1) * pageSize)
     const embeds = viewer.historyEmbeds(rows)
-    await interaction.reply({ embeds: [embeds[0]] })
+    await interaction.editReply({ embeds: [embeds[0]] })
   }
 }
