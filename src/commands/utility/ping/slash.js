@@ -1,16 +1,10 @@
-const COMMAND_ENABLED = true
 const { SlashCommandBuilder } = require("discord.js")
+const safeReply = require("../../../utils/safeReply")
 const success = require("../../../messages/embeds/success.embed")
 
 module.exports = {
-  COMMAND_ENABLED,
-  data: new SlashCommandBuilder()
-    .setName("ping")
-    .setDescription("Ping"),
-
+  data: new SlashCommandBuilder().setName("ping").setDescription("Ping"),
   async execute(interaction) {
-    return interaction.reply({
-      embeds: [success("Pong")]
-    })
+    await safeReply(interaction, { embeds: [success("Pong")] })
   }
 }

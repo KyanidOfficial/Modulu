@@ -1,46 +1,33 @@
 const { SlashCommandBuilder } = require("discord.js")
-const db = require("../../../core/database")
-const viewer = require("../../../modules/case/viewer")
-const guard = require("../../../core/middleware/permissionGuard")
+const guard = require("../../../middleware/permission.guard")
+const safeReply = require("../../../utils/safeReply")
+const error = require("../../../messages/embeds/error.embed")
+const caseEmbed = require("../../../messages/embeds/case.embed")
+const caseService = require("../../../services/case/case.service")
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("case")
-    .setDescription("Case tools")
-    .addSubcommand(s => s.setName("view").setDescription("View case").addIntegerOption(o => o.setName("id").setDescription("case id").setRequired(true)))
-    .addSubcommand(s =>
-      s
-        .setName("history")
-        .setDescription("User case history")
-        .addUserOption(o => o.setName("user").setDescription("target user").setRequired(true))
-        .addIntegerOption(o => o.setName("page").setDescription("page").setRequired(false))
-    ),
-
+    .setDescription("View moderation cases")
+    .addSubcommand(s => s.setName("view").setDescription("View case").addIntegerOption(o => o.setName("id").setDescription("Case id").setRequired(true)))
+    .addSubcommand(s => s.setName("history").setDescription("History").addUserOption(o => o.setName("user").setDescription("Target user").setRequired(true)).addIntegerOption(o => o.setName("page").setDescription("Page"))),
   async execute(interaction) {
-    if (!guard.require(interaction, ["ModerateMembers"])) {
-      await interaction.editReply({ content: "Missing permission", ephemeral: true })
-      return
-    }
+    const check = guard.moderation(interaction)
+    if (!check.ok) return safeReply(interaction, { embeds: [error(check.reason)] })
 
     const sub = interaction.options.getSubcommand()
-    const guildId = interaction.guildId
-
     if (sub === "view") {
       const id = interaction.options.getInteger("id", true)
-      const row = await db.getCaseById(guildId, id)
-      if (!row) {
-        await interaction.editReply({ content: "Case not found", ephemeral: true })
-        return
-      }
-      await interaction.editReply({ embeds: [viewer.caseEmbed(row)] })
-      return
+      const record = await caseService.get(interaction.guildId, id)
+      if (!record) return safeReply(interaction, { embeds: [error("Case not found")] })
+      return safeReply(interaction, { embeds: [caseEmbed({ caseId: record.case_id || id, action: record.action_type, reason: record.reason, actorId: record.actor_id })] })
     }
 
     const user = interaction.options.getUser("user", true)
     const page = interaction.options.getInteger("page") || 1
-    const pageSize = 5
-    const rows = await db.getCaseHistory(guildId, user.id, pageSize, (page - 1) * pageSize)
-    const embeds = viewer.historyEmbeds(rows)
-    await interaction.editReply({ embeds: [embeds[0]] })
+    const rows = await caseService.history(interaction.guildId, user.id, page)
+    if (!rows.length) return safeReply(interaction, { embeds: [error("No cases found")] })
+    const top = rows[0]
+    return safeReply(interaction, { embeds: [caseEmbed({ caseId: top.case_id, action: top.action_type, reason: top.reason, actorId: top.actor_id })] })
   }
 }
