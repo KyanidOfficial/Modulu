@@ -1,9 +1,12 @@
 const { EmbedBuilder } = require("discord.js")
 const COLORS = require("../../utils/colors")
-const { EMOJIS } = require("../../utils/constants")
 
-module.exports = (user, warns) =>
+module.exports = ({ userMention, content, moderatorMention, color }) =>
   new EmbedBuilder()
-    .setTitle(`${user} warnings`)
-    .setDescription(warns || "No warnings")
-    .setColor(COLORS.warning)
+    .setTitle(`${userMention} warnings`)
+    .setDescription(content || "No warnings found")
+    .setColor(color || COLORS.info)
+    .setFooter({
+      text: `Moderator: ${moderatorMention || "N/A"} • ${new Date().toISOString()}`
+    })
+    .setTimestamp()

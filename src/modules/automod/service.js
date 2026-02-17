@@ -4,6 +4,7 @@ const COLORS = require("../../utils/colors")
 const { extract } = require("../../utils/linkScanner")
 const { normalizeText } = require("./normalizer")
 const store = require("./store")
+const warningStore = require("../warnings/store")
 const { moderateContent } = require("./aiModeration")
 
 const recentMessages = new Map()
@@ -137,7 +138,37 @@ const applyPunishment = async ({ message, cfg, trigger, aiResult }) => {
   await message.delete().catch(() => {})
 
   if (action === "warn") {
-    await logModerationAction({ guild, action: "warn", userId, moderatorId: guild.members.me?.id, reason, metadata: { trigger, ai: aiResult, points }, color: COLORS.warning })
+    try {
+      const warningId = await warningStore.createWarning({
+        guildId: guild.id,
+        userId,
+        moderatorId: guild.members.me?.id || "0",
+        reason,
+        source: "automod"
+      })
+      const totalWarnings = await warningStore.countWarnings(guild.id, userId)
+      await logModerationAction({
+        guild,
+        action: "warn",
+        userId,
+        moderatorId: guild.members.me?.id,
+        reason,
+        metadata: { trigger, ai: aiResult, points, warningId, warningCount: totalWarnings },
+        color: COLORS.warning
+      })
+    } catch (err) {
+      console.error("[AUTOMOD] Failed to persist warning", err)
+      await logModerationAction({
+        guild,
+        action: "warn_failed",
+        userId,
+        moderatorId: guild.members.me?.id,
+        reason: `${reason} (persist failed)`,
+        metadata: { trigger, ai: aiResult, points, error: err?.message },
+        color: COLORS.error
+      })
+      return
+    }
   }
 
   if (action === "mute") {
