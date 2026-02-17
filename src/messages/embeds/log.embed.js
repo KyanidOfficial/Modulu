@@ -11,6 +11,7 @@ module.exports = data => {
       `**User:** ${data?.user || "Unknown"}\n` +
       `**Moderator:** ${data?.moderator || "Unknown"}\n` +
       `**Reason:** ${data?.reason || "No reason provided"}\n` +
+      `**Warning Count:** ${data?.warningCount ?? "N/A"}\n` +
       `**Duration:** ${data?.duration || "N/A"}\n` +
       `**Expires at:** ${
         data?.expiresAt
@@ -18,5 +19,6 @@ module.exports = data => {
           : "N/A"
       }`
     )
+    .setFooter({ text: `Moderation Log • ${new Date().toISOString()}` })
     .setTimestamp()
 }
