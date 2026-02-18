@@ -7,7 +7,7 @@ const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
 const { resolveModerationAccess } = require("../../../utils/permissionResolver")
-const warningStore = require("../../../modules/warnings/store")
+const warningStore = require("../../../modules/automod/warnings.store")
 
 const WARNING_AUTOPUNISH_THRESHOLD = Number.parseInt(process.env.WARNING_AUTOPUNISH_THRESHOLD || "0", 10)
 const WARNING_AUTOPUNISH_ACTION = (process.env.WARNING_AUTOPUNISH_ACTION || "timeout").toLowerCase()

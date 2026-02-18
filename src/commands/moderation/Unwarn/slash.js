@@ -7,7 +7,7 @@ const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
 const { resolveModerationAccess } = require("../../../utils/permissionResolver")
-const warningStore = require("../../../modules/warnings/store")
+const warningStore = require("../../../modules/automod/warnings.store")
 
 module.exports = {
   COMMAND_ENABLED,

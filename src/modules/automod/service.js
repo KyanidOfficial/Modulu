@@ -4,7 +4,7 @@ const COLORS = require("../../utils/colors")
 const { extract } = require("../../utils/linkScanner")
 const { normalizeText } = require("./normalizer")
 const store = require("./store")
-const warningStore = require("../warnings/store")
+const warningStore = require("./warnings.store")
 const { moderateContent } = require("./aiModeration")
 const { escapeMarkdownSafe } = require("../../utils/safeText")
 

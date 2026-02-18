@@ -4,7 +4,7 @@ const warnsEmbed = require("../../../messages/embeds/warns.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
 const COLORS = require("../../../utils/colors")
 const { resolveModerationAccess } = require("../../../utils/permissionResolver")
-const warningStore = require("../../../modules/warnings/store")
+const warningStore = require("../../../modules/automod/warnings.store")
 
 module.exports = {
   COMMAND_ENABLED,
