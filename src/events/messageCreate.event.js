@@ -7,25 +7,13 @@ const giveawayTrigger = require("./messages/giveawayTrigger")
 const handleApplicationDm = require("../modules/applications/dm.handler")
 const automod = require("../modules/automod/service")
 
-const log = (message, meta = {}) => {
-  const parts = Object.entries(meta).map(([k, v]) => `${k}=${v}`)
-  console.log(`[APPLICATIONS] ${message}${parts.length ? ` ${parts.join(" ")}` : ""}`)
-}
-
 const isDmBasedChannel = channel =>
   Boolean(channel && typeof channel.isDMBased === "function" && channel.isDMBased())
 
 module.exports = async (client, message) => {
-  if (!message) return
-  if (message.author?.bot) return
+  if (!message || message.author?.bot) return
 
   const isDM = isDmBasedChannel(message.channel)
-
-  log("messageCreate event firing", {
-    userId: message.author?.id || "unknown",
-    channelType: message.channel?.type,
-    isDM
-  })
 
   // DM routing must happen before guild-only middleware.
   if (isDM) {
@@ -36,8 +24,12 @@ module.exports = async (client, message) => {
 
   if (!message.content && message.attachments.size === 0) return
 
-  const automodResult = await automod.handleMessage(message)
-  if (automodResult?.blocked) return
+  try {
+    const automodResult = await automod.handleMessage(message)
+    if (automodResult?.blocked) return
+  } catch (err) {
+    console.error("[MESSAGE_CREATE] automod execution failed", err)
+  }
 
   await spamProtection(message)
   await sbDebug(message)
