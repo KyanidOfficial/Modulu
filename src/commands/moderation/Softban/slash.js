@@ -155,6 +155,7 @@ module.exports = {
         embed({
           users: `<@${targetUser.id}>`,
           punishment: "softban",
+          moderatorId: interaction.user.id,
           state: "applied",
           reason,
           color: COLORS.success

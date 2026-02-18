@@ -10,33 +10,47 @@ const SHORTENER_DOMAINS = [
 
 const BANNED_WORD_PRESETS = {
   racial_slurs: [
-    /\bn[i1]gg[e3]r(s)?\b/i,
-    /\bf[a@]gg?[o0]t(s)?\b/i,
-    /\bch[i1]nk(s)?\b/i,
-    /\bsp[i1]c(s)?\b/i
+    "nigger",
+    "nigga",
+    "faggot",
+    "chink",
+    "spic",
+    "kike",
+    "wetback",
+    "coon",
+    "paki"
   ],
 
   hate_speech: [
-    /\bkill (all|every) (gays|jews|muslims|blacks|women)\b/i,
-    /\bwhite power\b/i,
-    /\bgo back to (your|ur) country\b/i,
-    /\bheil h[i1]tler\b/i
+    "white power",
+    "heil hitler",
+    "kill all gays",
+    "kill all jews",
+    "gas the jews",
+    "go back to your country",
+    "go back to where you came from",
+    "burn the gays",
+    "death to muslims"
   ],
 
   sexual_content: [
-    /\bchild porn\b/i,
-    /\bnudes?\b/i,
-    /\bincest\b/i,
-    /\brape\b/i,
-    /\bdeepthroat\b/i
+    "child porn",
+    "cp link",
+    "send nudes",
+    "nudes",
+    "dick pic",
+    "pussy pic",
+    "rape",
+    "raped you",
+    "incest"
   ],
 
   severe_profanity: [
-    /\bf[u*]+ck\b/i,
-    /\bsh[i1]t\b/i,
-    /\bc[u*]nt\b/i,
-    /\bmotherf[u*]+cker\b/i,
-    /\bd[i1]ck\b/i
+    "motherfucker",
+    "bitch",
+    "asshole",
+    "cunt",
+    "dick"
   ]
 };
 
