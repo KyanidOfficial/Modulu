@@ -5,7 +5,9 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/index.js",
-    "postinstall": "node scripts/fix-magic-bytes.js"
+    "postinstall": "node scripts/fix-magic-bytes.js",
+    "typecheck": "tsc --noEmit",
+    "test:risk": "tsc -p tsconfig.json && node --test dist/__tests__/riskEngine.test.js"
   },
   "dependencies": {
     "discord.js": "^14.25.1",
