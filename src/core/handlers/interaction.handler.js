@@ -18,6 +18,7 @@ const staffTimeButtons = require("./staffTime.buttons")
 const handleApplications = require("../../modules/applications/handlers")
 const { requireEnabled } = require("../../utils/commandToggle")
 const handleAutomodPanel = require("../../modules/automod/panel.handlers")
+const { handleRiskComponent } = require("../risk/panel/runtime")
 
 const GLOBAL_FEEDBACK_CHANNEL = "1456085711802335353"
 const FEEDBACK_COOLDOWN = 1000 * 60 * 60
@@ -46,6 +47,11 @@ module.exports = async (client, interaction) => {
 
       if (interaction.customId?.startsWith("automod:")) {
         await handleAutomodPanel(interaction)
+        return
+      }
+
+      if (interaction.customId?.startsWith("risk:")) {
+        await handleRiskComponent(interaction, client.riskEngine)
         return
       }
     }
