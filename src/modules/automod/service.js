@@ -258,6 +258,43 @@ const logTrigger = async ({ message, cfg, trigger, actionTaken, extraMetadata = 
   }
 }
 
+
+const toAutomodSeverity = trigger => {
+  if (trigger.action === "delete_timeout") return 4
+  if (trigger.action === "delete_only") return 3
+  return 2
+}
+
+const reportRiskSignal = async (message, trigger) => {
+  const engine = message.client?.riskEngine
+  if (!engine || typeof engine.recordAutomodSignal !== "function") return
+
+  const joinedTs = message.member?.joinedTimestamp || Date.now()
+  const accountAgeDays = Math.max(0, Math.floor((Date.now() - message.author.createdTimestamp) / 86400000))
+  const daysInGuild = Math.max(0, Math.floor((Date.now() - joinedTs) / 86400000))
+
+  try {
+    await engine.recordAutomodSignal({
+      guildId: message.guild.id,
+      userId: message.author.id,
+      accountAgeDays,
+      daysInGuild,
+      occurredAt: new Date(message.createdTimestamp),
+      signal: {
+        type: trigger.type,
+        severity: toAutomodSeverity(trigger),
+        metadata: {
+          reason: trigger.reason,
+          ruleName: trigger.ruleName,
+          channelId: message.channel.id
+        }
+      }
+    })
+  } catch (error) {
+    console.warn("[RISK] Failed to record automod signal", error?.message || error)
+  }
+}
+
 const applyAction = async ({ message, cfg, trigger }) => {
   const guild = message.guild
   const member = message.member
@@ -295,6 +332,8 @@ const applyAction = async ({ message, cfg, trigger }) => {
       }
     }
   })
+
+  await reportRiskSignal(message, trigger)
 
   if (trigger.action === "delete_only") {
     await logTrigger({ message, cfg, trigger, actionTaken: "delete_only", color: COLORS.warning })
