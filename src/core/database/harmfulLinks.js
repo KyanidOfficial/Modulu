@@ -1,8 +1,9 @@
-const db = require("./mysql")
+const { getPool } = require("./mysql")
 
 module.exports = {
   async get(guildId) {
-    const [rows] = await db.query(
+    const pool = getPool()
+    const [rows] = await pool.query(
       "SELECT * FROM harmful_links WHERE guild_id = ?",
       [guildId]
     )
@@ -22,6 +23,8 @@ module.exports = {
   },
 
   async save(guildId, data) {
+    const pool = getPool()
+
     const enabled = data.enabled ? 1 : 0
     const scanStaff = data.scan_staff ? 1 : 0
     const timeout = data.timeout ? 1 : 0
@@ -31,7 +34,7 @@ module.exports = {
         : 600
     const logEnabled = data.log_enabled ? 1 : 0
 
-    await db.query(
+    await pool.query(
       `INSERT INTO harmful_links
        (guild_id, enabled, scan_staff, timeout, timeout_time, log_enabled)
        VALUES (?, ?, ?, ?, ?, ?)

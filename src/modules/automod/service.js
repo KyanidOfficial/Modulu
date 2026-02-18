@@ -8,7 +8,9 @@ const store = require("./store")
 
 const SAFE_DOMAINS = new Set([
   "roblox.com",
+  "tiktok.com",
   "tenor.com",
+  "medal.tv",
   "youtube.com",
   "youtu.be",
   "twitter.com",
@@ -412,32 +414,6 @@ const createEvaluationResult = triggers => {
   }
 }
 
-const reportRiskSignal = async (message, evaluation, actionTaken) => {
-  const engine = message.client?.riskEngine
-  if (!engine || typeof engine.recordAutomodSignal !== "function") return
-
-  const joinedTs = message.member?.joinedTimestamp || Date.now()
-  const accountAgeDays = Math.max(0, Math.floor((Date.now() - message.author.createdTimestamp) / 86400000))
-  const daysInGuild = Math.max(0, Math.floor((Date.now() - joinedTs) / 86400000))
-
-  await engine.recordAutomodSignal({
-    guildId: message.guild.id,
-    userId: message.author.id,
-    accountAgeDays,
-    daysInGuild,
-    occurredAt: new Date(message.createdTimestamp),
-    signal: {
-      type: "automod_score",
-      severity: Math.min(5, Math.max(1, Math.ceil(evaluation.violationScore / 4))),
-      metadata: {
-        actionTaken,
-        violationScore: evaluation.violationScore,
-        triggers: evaluation.triggers.map(trigger => trigger.triggerType)
-      }
-    }
-  })
-}
-
 const safeDeleteMessage = async message => {
   if (message.deleted) return true
   await message.delete()
@@ -487,21 +463,25 @@ const applyAction = async ({ message, cfg, evaluation, recommendedAction }) => {
     return { blocked: false, recommendedAction }
   }
 
-  await store.addInfraction({
-    guildId: guild.id,
-    userId: message.author.id,
-    triggerType: cooldownKey,
-    reason: evaluation.summary,
-    metadata: {
-      automod: {
-        violationScore: evaluation.violationScore,
-        triggers: evaluation.triggers,
-        actionRequested: recommendedAction,
-        messagePreview: safePreview(message.content),
-        channelId: message.channel.id
+  try {
+    await store.addInfraction({
+      guildId: guild.id,
+      userId: message.author.id,
+      triggerType: cooldownKey,
+      reason: evaluation.summary,
+      metadata: {
+        automod: {
+          violationScore: evaluation.violationScore,
+          triggers: evaluation.triggers,
+          actionRequested: recommendedAction,
+          messagePreview: safePreview(message.content),
+          channelId: message.channel.id
+        }
       }
-    }
-  })
+    })
+  } catch (e) {
+    console.error("[AUTOMOD] Failed to store infraction:", e?.message)
+  }
 
   if (recommendedAction !== "delete_timeout") {
     await logStructuredEvent({ message, cfg, evaluation, actionTaken: "delete" })
@@ -575,10 +555,6 @@ module.exports.handleMessage = async message => {
       evaluation,
       recommendedAction: evaluation.recommendedAction
     })
-
-    if (actionResult.blocked || actionResult.recommendedAction === "warn") {
-      await reportRiskSignal(message, evaluation, actionResult.recommendedAction)
-    }
 
     return {
       blocked: Boolean(actionResult.blocked),
