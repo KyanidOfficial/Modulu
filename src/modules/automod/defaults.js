@@ -30,7 +30,7 @@ module.exports = {
       action: "delete_timeout",
       timeoutMs: 10 * 60 * 1000,
       mode: "block_invites_only",
-      scoreInvite: 6,
+      scoreInvite: 10,
       scoreShortener: 5,
       scoreBlockedDomain: 8,
       blockedDomains: [],
@@ -51,10 +51,12 @@ module.exports = {
       maxMessages: 12,
       windowMs: 15000,
       maxDuplicates: 5,
-      duplicateWindowMs: 10000,
+      duplicateWindowMs: 15000,
       similarityThreshold: 0.7,
       minMessagesForEvaluation: 3,
-      maxAverageLength: 20
+      minMessageLength: 5,
+      scoreRate: 5,
+      scoreSimilarity: 5
     },
     capsSpam: {
       enabled: true,

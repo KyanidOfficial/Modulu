@@ -7,6 +7,8 @@ const { escapeMarkdownSafe } = require("../../utils/safeText")
 const store = require("./store")
 
 const SAFE_DOMAINS = new Set([
+  "roblox.com",
+  "tenor.com",
   "youtube.com",
   "youtu.be",
   "twitter.com",
@@ -14,6 +16,7 @@ const SAFE_DOMAINS = new Set([
   "github.com",
   "discord.com",
   "discord.gg",
+  "cdn.discordapp.com",
   "discordapp.com",
   "discordapp.net",
   "discordcdn.com"
@@ -144,9 +147,8 @@ const detectLinks = (content, cfg) => {
   const blocked = new Set((rule.blockedDomains || []).map(normalizeHost))
   const shorteners = new Set((rule.shortenerDomains || []).map(normalizeHost))
 
-  let score = 0
-  const reasons = []
   const matchedHosts = new Set()
+  const reasons = []
 
   for (const rawUrl of urls) {
     const host = parseHostFromUrl(rawUrl)
@@ -157,20 +159,18 @@ const detectLinks = (content, cfg) => {
     const isWhitelisted = matchesDomainSet(host, whitelist)
     const isInvite = INVITE_RE.test(rawUrl)
 
-    if (isSafeDomain || isWhitelisted) continue
-
     if (mode === "block_invites_only") {
       if (isInvite) {
-        score += rule.scoreInvite ?? 6
         matchedHosts.add(host)
         reasons.push("Discord invite detected")
       }
       continue
     }
 
+    if (isSafeDomain || isWhitelisted) continue
+
     if (mode === "block_shortened_urls") {
       if (matchesDomainSet(host, shorteners)) {
-        score += rule.scoreShortener ?? 5
         matchedHosts.add(host)
         reasons.push(`Shortened URL domain: ${host}`)
       }
@@ -178,29 +178,33 @@ const detectLinks = (content, cfg) => {
     }
 
     if (mode === "allow_whitelist_only") {
-      score += rule.scoreBlockedDomain ?? 8
       matchedHosts.add(host)
       reasons.push(`Domain not in whitelist: ${host}`)
       continue
     }
 
     if (matchesDomainSet(host, blocked)) {
-      score += rule.scoreBlockedDomain ?? 8
       matchedHosts.add(host)
       reasons.push(`Blocked domain: ${host}`)
     }
   }
 
-  if (!score) return null
+  if (!reasons.length) return null
+
+  const isInviteOnly = reasons.every(reason => reason === "Discord invite detected")
+  const score = isInviteOnly ? (rule.scoreInvite ?? 10) :
+    mode === "block_shortened_urls" ? (rule.scoreShortener ?? 5) :
+      (rule.scoreBlockedDomain ?? 8)
 
   return toDetectorResult({
     score,
     triggerType: "links",
     reason: reasons.join("; "),
     timeoutMs: rule.timeoutMs,
-    metadata: { hosts: [...matchedHosts], mode }
+    metadata: { hosts: [...matchedHosts], mode, isInviteOnly }
   })
 }
+
 
 const detectMentionSpam = (message, cfg) => {
   const rule = cfg.rules.mentionSpam
@@ -257,50 +261,50 @@ const detectMessageSpam = (message, cfg) => {
   const now = Date.now()
   const bucket = getBucket(message.guild.id, message.author.id)
   const normalized = normalizeMessageForSimilarity(message.content || "")
+  const minLength = rule.minMessageLength ?? 5
 
   bucket.push({ ts: now, text: normalized, len: normalized.length })
   compactBucket(bucket, Math.max(rule.windowMs, rule.duplicateWindowMs, BUCKET_RETENTION_MS))
 
   const windowMessages = bucket.filter(item => now - item.ts <= rule.windowMs)
-  if (windowMessages.length < (rule.minMessagesForEvaluation ?? 3)) return null
+  const comparableWindowMessages = windowMessages.filter(item => item.len >= minLength)
+  if (comparableWindowMessages.length < (rule.minMessagesForEvaluation ?? 3)) return null
 
-  const rateExceeded = windowMessages.length > rule.maxMessages
-  const avgLength = windowMessages.reduce((sum, item) => sum + item.len, 0) / windowMessages.length
-  const similarity = calculateSimilarityRatio(windowMessages.map(item => item.text))
-  const highSimilarity = similarity >= (rule.similarityThreshold ?? 0.7)
+  const rateExceeded = comparableWindowMessages.length > rule.maxMessages
+  if (!rateExceeded) return null
 
-  if (!rateExceeded || !highSimilarity) return null
+  const duplicateMessages = bucket.filter(item => now - item.ts <= rule.duplicateWindowMs && item.len >= minLength)
+  const duplicateCounts = duplicateMessages.reduce((map, item) => {
+    map.set(item.text, (map.get(item.text) || 0) + 1)
+    return map
+  }, new Map())
+  const maxDuplicates = duplicateCounts.size ? Math.max(...duplicateCounts.values()) : 0
 
-  let score = 0
-  const reasons = []
+  const similarity = calculateSimilarityRatio(comparableWindowMessages.map(item => item.text))
+  const similarityThreshold = rule.similarityThreshold ?? 0.7
+  const highSimilarity = similarity >= similarityThreshold
 
-  score += 4
-  reasons.push(`Rate exceeded (${windowMessages.length}/${rule.maxMessages})`)
+  if (!highSimilarity) return null
 
-  if (avgLength <= (rule.maxAverageLength ?? 20)) {
-    if (similarity >= 0.9) {
-      score += 6
-      reasons.push(`Very high similarity (${Math.round(similarity * 100)}%)`)
-    } else {
-      score += 4
-      reasons.push(`High similarity (${Math.round(similarity * 100)}%)`)
-    }
-  }
-
-  if (!score) return null
+  const duplicateExceeded = maxDuplicates >= rule.maxDuplicates
+  const score = (rule.scoreRate ?? 5) + (rule.scoreSimilarity ?? 5)
 
   return toDetectorResult({
     score,
     triggerType: "messageSpam",
-    reason: reasons.join("; "),
+    reason: `Rate exceeded (${comparableWindowMessages.length}/${rule.maxMessages}); Similarity ${Math.round(similarity * 100)}%; Duplicates ${maxDuplicates}/${rule.maxDuplicates}`,
     timeoutMs: rule.timeoutMs,
     metadata: {
-      messageCount: windowMessages.length,
+      messageCount: comparableWindowMessages.length,
       similarity,
-      averageLength: avgLength
+      duplicateExceeded,
+      maxDuplicates,
+      rateExceeded,
+      highSimilarity
     }
   })
 }
+
 
 const stripCapsIgnoredSegments = content =>
   String(content || "")
@@ -385,37 +389,6 @@ const logStructuredEvent = async ({ message, cfg, evaluation, actionTaken, error
   })
 }
 
-const evaluateNewUserSensitivity = message => {
-  const accountAgeMs = Date.now() - message.author.createdTimestamp
-  const joinedTimestamp = message.member?.joinedTimestamp || Date.now()
-  const joinedAgeMs = Date.now() - joinedTimestamp
-
-  let score = 0
-  const reasons = []
-
-  if (accountAgeMs < 3 * 24 * 60 * 60 * 1000) {
-    score += 2
-    reasons.push("Account age under 3 days")
-  }
-
-  if (joinedAgeMs < 24 * 60 * 60 * 1000) {
-    score += 2
-    reasons.push("Joined guild within 24 hours")
-  }
-
-  if (!score) return null
-
-  return toDetectorResult({
-    score,
-    triggerType: "newUserSensitivity",
-    reason: reasons.join("; "),
-    metadata: {
-      accountAgeHours: Math.floor(accountAgeMs / 3600000),
-      joinedAgeHours: Math.floor(joinedAgeMs / 3600000)
-    }
-  })
-}
-
 const determineRecommendedAction = (score, cfg) => {
   const thresholds = cfg.scoreThresholds || {}
   const warnThreshold = thresholds.warn ?? 5
@@ -487,18 +460,10 @@ const applyAction = async ({ message, cfg, evaluation, recommendedAction }) => {
   }
 
   const cooldownKey = evaluation.triggers.map(trigger => trigger.triggerType).sort().join("+") || "none"
-  const isCoolingDown = await store.isPunishmentCoolingDown(guild.id, message.author.id, cooldownKey)
-  if (isCoolingDown) {
-    await logStructuredEvent({ message, cfg, evaluation, actionTaken: "skipped_cooldown" })
-    return { blocked: false, recommendedAction }
-  }
+  const inviteTriggerCount = evaluation.triggers.filter(trigger => trigger.triggerType === "links" && trigger.metadata?.isInviteOnly).length
+  const spamTrigger = evaluation.triggers.find(trigger => trigger.triggerType === "messageSpam")
 
-  await store.setPunishmentCooldown(guild.id, message.author.id, cooldownKey, cfg.cooldownMs)
-
-  if (recommendedAction === "ignore") {
-    await logStructuredEvent({ message, cfg, evaluation, actionTaken: "log_only" })
-    return { blocked: false, recommendedAction }
-  }
+  if (recommendedAction === "ignore") return { blocked: false, recommendedAction }
 
   if (recommendedAction === "warn") {
     try {
@@ -543,6 +508,17 @@ const applyAction = async ({ message, cfg, evaluation, recommendedAction }) => {
     return { blocked: true, recommendedAction }
   }
 
+  const canTimeoutForSpam = Boolean(spamTrigger?.metadata?.rateExceeded && spamTrigger?.metadata?.duplicateExceeded)
+  const canTimeoutForInvites = inviteTriggerCount >= 1 && await store.isPunishmentCoolingDown(guild.id, message.author.id, "invite_repeat_timeout")
+
+  if (!canTimeoutForSpam && !canTimeoutForInvites) {
+    await logStructuredEvent({ message, cfg, evaluation, actionTaken: "delete_no_timeout_gate" })
+    if (inviteTriggerCount >= 1) {
+      await store.setPunishmentCooldown(guild.id, message.author.id, "invite_repeat_timeout", cfg.cooldownMs)
+    }
+    return { blocked: true, recommendedAction: "delete" }
+  }
+
   if (!me.permissions.has(PermissionsBitField.Flags.ModerateMembers) || !member.moderatable) {
     await logStructuredEvent({ message, cfg, evaluation, actionTaken: "delete_only_timeout_permission_missing" })
     return { blocked: true, recommendedAction: "delete" }
@@ -567,8 +543,7 @@ const evaluateMessage = (message, cfg) => {
     detectLinks(message.content || "", cfg),
     detectMentionSpam(message, cfg),
     detectMessageSpam(message, cfg),
-    detectCapsSpam(message.content || "", cfg),
-    evaluateNewUserSensitivity(message)
+    detectCapsSpam(message.content || "", cfg)
   ].filter(Boolean)
 
   const evaluation = createEvaluationResult(triggers)
@@ -601,7 +576,9 @@ module.exports.handleMessage = async message => {
       recommendedAction: evaluation.recommendedAction
     })
 
-    await reportRiskSignal(message, evaluation, actionResult.recommendedAction)
+    if (actionResult.blocked || actionResult.recommendedAction === "warn") {
+      await reportRiskSignal(message, evaluation, actionResult.recommendedAction)
+    }
 
     return {
       blocked: Boolean(actionResult.blocked),
