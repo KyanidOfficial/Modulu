@@ -228,13 +228,6 @@ const detectCapsSpam = (content, cfg) => {
   }
 }
 
-const resolveLogChannel = (guild, cfg) => {
-  const channelId = cfg.logChannelId || null
-  if (!channelId) return null
-  const channel = guild.channels.cache.get(channelId)
-  return channel && channel.isTextBased() ? channel : null
-}
-
 const logTrigger = async ({ message, cfg, trigger, actionTaken, extraMetadata = {}, color = COLORS.warning }) => {
   await logModerationAction({
     guild: message.guild,

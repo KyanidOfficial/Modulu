@@ -10,26 +10,36 @@ const SHORTENER_DOMAINS = [
 
 const BANNED_WORD_PRESETS = {
   racial_slurs: [
-    "racial slur 1",
-    "racial slur 2",
-    "racial slur 3"
+    /\bn[i1]gg[e3]r(s)?\b/i,
+    /\bf[a@]gg?[o0]t(s)?\b/i,
+    /\bch[i1]nk(s)?\b/i,
+    /\bsp[i1]c(s)?\b/i
   ],
+
   hate_speech: [
-    "hate phrase 1",
-    "hate phrase 2",
-    "hate phrase 3"
+    /\bkill (all|every) (gays|jews|muslims|blacks|women)\b/i,
+    /\bwhite power\b/i,
+    /\bgo back to (your|ur) country\b/i,
+    /\bheil h[i1]tler\b/i
   ],
+
   sexual_content: [
-    "explicit term 1",
-    "explicit term 2",
-    "explicit term 3"
+    /\bchild porn\b/i,
+    /\bnudes?\b/i,
+    /\bincest\b/i,
+    /\brape\b/i,
+    /\bdeepthroat\b/i
   ],
+
   severe_profanity: [
-    "severe profanity 1",
-    "severe profanity 2",
-    "severe profanity 3"
+    /\bf[u*]+ck\b/i,
+    /\bsh[i1]t\b/i,
+    /\bc[u*]nt\b/i,
+    /\bmotherf[u*]+cker\b/i,
+    /\bd[i1]ck\b/i
   ]
-}
+};
+
 
 const normalizeWord = word =>
   String(word || "")
