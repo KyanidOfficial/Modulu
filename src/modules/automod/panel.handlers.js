@@ -1,15 +1,25 @@
-const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } = require("discord.js")
+const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
 const store = require("./store")
 const systemEmbed = require("../../messages/embeds/system.embed")
 const COLORS = require("../../utils/colors")
 const {
+  BANNED_WORD_PRESETS,
+  normalizeWord,
+  uniqueNormalized
+} = require("./presets")
+const {
   ruleLabelMap,
+  linkModeLabelMap,
   createDashboardEmbed,
   createDashboardComponents,
   createRuleSelect,
   createBackComponents,
   createLogChannelSelect,
-  createRecentEmbed
+  createPresetSelect,
+  createLinkModeSelect,
+  createRecentEmbed,
+  createBannedContentEmbed,
+  createBannedContentPagination
 } = require("./panel")
 
 const parseNumber = (value, fallback, min, max) => {
@@ -18,7 +28,14 @@ const parseNumber = (value, fallback, min, max) => {
   return Math.max(min, Math.min(max, num))
 }
 
-const buildModalForRule = (ruleKey, cfg, messageId) => {
+const parseDomainList = raw =>
+  String(raw || "")
+    .split(",")
+    .map(v => v.trim().toLowerCase())
+    .filter(Boolean)
+    .map(v => v.replace(/^https?:\/\//, "").replace(/\/.*$/, ""))
+
+const buildRuleConfigModal = (ruleKey, cfg, messageId) => {
   const modal = new ModalBuilder()
     .setCustomId(`automod:configure:modal:${ruleKey}:${messageId}`)
     .setTitle(`Configure ${ruleLabelMap[ruleKey]}`)
@@ -60,16 +77,74 @@ const buildModalForRule = (ruleKey, cfg, messageId) => {
   return modal
 }
 
+const buildWordsModal = messageId => {
+  const modal = new ModalBuilder()
+    .setCustomId(`automod:words:modal:${messageId}`)
+    .setTitle("Manage Banned Words")
+
+  const modeInput = new TextInputBuilder()
+    .setCustomId("mode")
+    .setLabel("Mode (add or remove)")
+    .setStyle(TextInputStyle.Short)
+    .setValue("add")
+    .setRequired(true)
+
+  const wordsInput = new TextInputBuilder()
+    .setCustomId("words")
+    .setLabel("Comma separated words")
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(modeInput),
+    new ActionRowBuilder().addComponents(wordsInput)
+  )
+
+  return modal
+}
+
+const buildWhitelistModal = messageId => {
+  const modal = new ModalBuilder()
+    .setCustomId(`automod:links:whitelist:modal:${messageId}`)
+    .setTitle("Manage Whitelisted Domains")
+
+  const modeInput = new TextInputBuilder()
+    .setCustomId("mode")
+    .setLabel("Mode (add or remove)")
+    .setStyle(TextInputStyle.Short)
+    .setValue("add")
+    .setRequired(true)
+
+  const domainsInput = new TextInputBuilder()
+    .setCustomId("domains")
+    .setLabel("Comma separated domains")
+    .setStyle(TextInputStyle.Paragraph)
+    .setRequired(true)
+
+  modal.addComponents(
+    new ActionRowBuilder().addComponents(modeInput),
+    new ActionRowBuilder().addComponents(domainsInput)
+  )
+
+  return modal
+}
+
+const renderDashboard = async interaction => {
+  const cfg = await store.getConfig(interaction.guild.id)
+  const recent = await store.getRecentInfractions(interaction.guild.id, 10)
+
+  return interaction.update({
+    embeds: [createDashboardEmbed({ cfg, recentCount: recent.length })],
+    components: createDashboardComponents()
+  })
+}
+
 module.exports = async interaction => {
   if (interaction.isButton() && interaction.customId.startsWith("automod:")) {
     const cfg = await store.getConfig(interaction.guild.id)
-    const recent = await store.getRecentInfractions(interaction.guild.id, 10)
 
     if (interaction.customId === "automod:home") {
-      return interaction.update({
-        embeds: [createDashboardEmbed({ cfg, recentCount: recent.length })],
-        components: createDashboardComponents()
-      })
+      return renderDashboard(interaction)
     }
 
     if (interaction.customId === "automod:toggle") {
@@ -100,6 +175,63 @@ module.exports = async interaction => {
         components: createBackComponents()
       })
     }
+
+    if (interaction.customId === "automod:words:manage") {
+      const modal = buildWordsModal(interaction.message.id)
+      return interaction.showModal(modal)
+    }
+
+    if (interaction.customId === "automod:preset:apply") {
+      return interaction.update({
+        embeds: [systemEmbed({ title: "Apply Preset", description: "Select a banned word preset to merge.", color: COLORS.info })],
+        components: [createPresetSelect(), ...createBackComponents()]
+      })
+    }
+
+    if (interaction.customId === "automod:links:manage") {
+      return interaction.update({
+        embeds: [systemEmbed({ title: "Link Filter Presets", description: "Choose mode or manage whitelist domains.", color: COLORS.info })],
+        components: [
+          createLinkModeSelect(cfg.rules.links.mode),
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId("automod:links:whitelist").setLabel("Manage Whitelist").setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId("automod:links:viewwhitelist").setLabel("View Whitelist").setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId("automod:home").setLabel("Back").setStyle(ButtonStyle.Secondary)
+          )
+        ]
+      })
+    }
+
+    if (interaction.customId === "automod:links:whitelist") {
+      const modal = buildWhitelistModal(interaction.message.id)
+      return interaction.showModal(modal)
+    }
+
+    if (interaction.customId === "automod:links:viewwhitelist") {
+      const domains = cfg.rules.links.whitelistedDomains
+      return interaction.update({
+        embeds: [systemEmbed({
+          title: "Whitelisted Domains",
+          description: domains.length ? domains.map(d => `• ${d}`).join("\n") : "No whitelisted domains.",
+          color: COLORS.info
+        })],
+        components: [
+          new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId("automod:links:manage").setLabel("Back to Link Presets").setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId("automod:home").setLabel("Dashboard").setStyle(ButtonStyle.Secondary)
+          )
+        ]
+      })
+    }
+
+    if (interaction.customId.startsWith("automod:viewcontent:")) {
+      const page = Number(interaction.customId.split(":")[2] || "0")
+      const view = createBannedContentEmbed({ cfg, page })
+      return interaction.update({
+        embeds: [view.embed],
+        components: createBannedContentPagination(view)
+      })
+    }
   }
 
   if (interaction.isStringSelectMenu() && interaction.customId === "automod:toggle:select") {
@@ -107,31 +239,67 @@ module.exports = async interaction => {
     const ruleKey = interaction.values[0]
     cfg.rules[ruleKey].enabled = !cfg.rules[ruleKey].enabled
     await store.saveConfig(interaction.guild.id, cfg)
-    const recent = await store.getRecentInfractions(interaction.guild.id, 10)
-
-    return interaction.update({
-      embeds: [createDashboardEmbed({ cfg, recentCount: recent.length })],
-      components: createDashboardComponents()
-    })
+    return renderDashboard(interaction)
   }
 
   if (interaction.isStringSelectMenu() && interaction.customId === "automod:configure:select") {
     const cfg = await store.getConfig(interaction.guild.id)
     const ruleKey = interaction.values[0]
-    const modal = buildModalForRule(ruleKey, cfg, interaction.message.id)
+    const modal = buildRuleConfigModal(ruleKey, cfg, interaction.message.id)
     return interaction.showModal(modal)
+  }
+
+  if (interaction.isStringSelectMenu() && interaction.customId === "automod:preset:select") {
+    const cfg = await store.getConfig(interaction.guild.id)
+    const presetKey = interaction.values[0]
+    const presetWords = BANNED_WORD_PRESETS[presetKey] || []
+
+    const before = cfg.rules.bannedWords.words.length
+    cfg.rules.bannedWords.words = uniqueNormalized([...cfg.rules.bannedWords.words, ...presetWords])
+    if (!cfg.activeBannedWordPresets.includes(presetKey)) cfg.activeBannedWordPresets.push(presetKey)
+    const after = cfg.rules.bannedWords.words.length
+    const added = after - before
+
+    await store.saveConfig(interaction.guild.id, cfg)
+
+    return interaction.update({
+      embeds: [systemEmbed({
+        title: "Preset Applied",
+        description: `Preset **${presetKey}** applied successfully. Added **${added}** words.`,
+        color: COLORS.success
+      })],
+      components: createBackComponents()
+    })
+  }
+
+  if (interaction.isStringSelectMenu() && interaction.customId === "automod:links:mode:select") {
+    const cfg = await store.getConfig(interaction.guild.id)
+    const mode = interaction.values[0]
+    cfg.rules.links.mode = mode
+    await store.saveConfig(interaction.guild.id, cfg)
+
+    return interaction.update({
+      embeds: [systemEmbed({
+        title: "Link Preset Updated",
+        description: `Link mode set to **${linkModeLabelMap[mode] || mode}**.`,
+        color: COLORS.success
+      })],
+      components: [
+        createLinkModeSelect(cfg.rules.links.mode),
+        new ActionRowBuilder().addComponents(
+          new ButtonBuilder().setCustomId("automod:links:whitelist").setLabel("Manage Whitelist").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId("automod:links:viewwhitelist").setLabel("View Whitelist").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId("automod:home").setLabel("Back").setStyle(ButtonStyle.Secondary)
+        )
+      ]
+    })
   }
 
   if (interaction.isChannelSelectMenu() && interaction.customId === "automod:setlog:select") {
     const cfg = await store.getConfig(interaction.guild.id)
     cfg.logChannelId = interaction.values[0] || null
     await store.saveConfig(interaction.guild.id, cfg)
-    const recent = await store.getRecentInfractions(interaction.guild.id, 10)
-
-    return interaction.update({
-      embeds: [createDashboardEmbed({ cfg, recentCount: recent.length })],
-      components: createDashboardComponents()
-    })
+    return renderDashboard(interaction)
   }
 
   if (interaction.isModalSubmit() && interaction.customId.startsWith("automod:configure:modal:")) {
@@ -154,11 +322,11 @@ module.exports = async interaction => {
     rule.timeoutMs = timeoutMin * 60000
 
     if (ruleKey === "bannedWords") {
-      rule.words = thresholdRaw.split(",").map(v => v.trim()).filter(Boolean)
+      rule.words = uniqueNormalized(thresholdRaw.split(","))
     }
 
     if (ruleKey === "links") {
-      rule.blockedDomains = thresholdRaw.split(",").map(v => v.trim().toLowerCase()).filter(Boolean)
+      rule.blockedDomains = uniqueNormalized(parseDomainList(thresholdRaw))
     }
 
     if (ruleKey === "mentionSpam") {
@@ -188,6 +356,91 @@ module.exports = async interaction => {
     const recent = await store.getRecentInfractions(interaction.guild.id, 10)
     const message = await interaction.channel.messages.fetch(messageId).catch(() => null)
     if (message) {
+      await message.edit({
+        embeds: [createDashboardEmbed({ cfg, recentCount: recent.length })],
+        components: createDashboardComponents()
+      })
+    }
+  }
+
+  if (interaction.isModalSubmit() && interaction.customId.startsWith("automod:words:modal:")) {
+    const messageId = interaction.customId.split(":")[3]
+    const cfg = await store.getConfig(interaction.guild.id)
+    const mode = interaction.fields.getTextInputValue("mode").trim().toLowerCase()
+    const words = uniqueNormalized(interaction.fields.getTextInputValue("words").split(","))
+
+    const before = cfg.rules.bannedWords.words.length
+
+    if (mode === "remove") {
+      const removeSet = new Set(words)
+      cfg.rules.bannedWords.words = cfg.rules.bannedWords.words.filter(word => !removeSet.has(normalizeWord(word)))
+    } else {
+      cfg.rules.bannedWords.words = uniqueNormalized([...cfg.rules.bannedWords.words, ...words])
+    }
+
+    const after = cfg.rules.bannedWords.words.length
+    await store.saveConfig(interaction.guild.id, cfg)
+
+    await interaction.reply({
+      embeds: [systemEmbed({
+        title: "Banned Words Updated",
+        description: mode === "remove"
+          ? `Removed **${Math.max(0, before - after)}** words.`
+          : `Added **${Math.max(0, after - before)}** words.`,
+        color: COLORS.success
+      })],
+      ephemeral: true
+    })
+
+    const message = await interaction.channel.messages.fetch(messageId).catch(() => null)
+    if (message) {
+      const recent = await store.getRecentInfractions(interaction.guild.id, 10)
+      await message.edit({
+        embeds: [createDashboardEmbed({ cfg, recentCount: recent.length })],
+        components: createDashboardComponents()
+      })
+    }
+  }
+
+  if (interaction.isModalSubmit() && interaction.customId.startsWith("automod:links:whitelist:modal:")) {
+    const messageId = interaction.customId.split(":")[4]
+    const cfg = await store.getConfig(interaction.guild.id)
+    const mode = interaction.fields.getTextInputValue("mode").trim().toLowerCase()
+    const domains = uniqueNormalized(parseDomainList(interaction.fields.getTextInputValue("domains")))
+
+    if (!domains.length) {
+      return interaction.reply({
+        embeds: [systemEmbed({ title: "Invalid Domains", description: "No valid domains provided.", color: COLORS.error })],
+        ephemeral: true
+      })
+    }
+
+    const before = cfg.rules.links.whitelistedDomains.length
+
+    if (mode === "remove") {
+      const removeSet = new Set(domains)
+      cfg.rules.links.whitelistedDomains = cfg.rules.links.whitelistedDomains.filter(domain => !removeSet.has(domain))
+    } else {
+      cfg.rules.links.whitelistedDomains = uniqueNormalized([...cfg.rules.links.whitelistedDomains, ...domains])
+    }
+
+    const after = cfg.rules.links.whitelistedDomains.length
+    await store.saveConfig(interaction.guild.id, cfg)
+
+    await interaction.reply({
+      embeds: [systemEmbed({
+        title: "Whitelist Updated",
+        description: mode === "remove"
+          ? `Removed **${Math.max(0, before - after)}** domains.`
+          : `Added **${Math.max(0, after - before)}** domains.`,
+        color: COLORS.success
+      })],
+      ephemeral: true
+    })
+
+    const message = await interaction.channel.messages.fetch(messageId).catch(() => null)
+    if (message) {
+      const recent = await store.getRecentInfractions(interaction.guild.id, 10)
       await message.edit({
         embeds: [createDashboardEmbed({ cfg, recentCount: recent.length })],
         components: createDashboardComponents()

@@ -22,7 +22,7 @@ module.exports.getConfig = async guildId => {
 module.exports.saveConfig = (guildId, config) => db.saveAutomodConfig(guildId, config)
 
 module.exports.addInfraction = payload => db.addAutomodInfraction(payload)
-module.exports.getRecentInfractions = async () => []
+module.exports.getRecentInfractions = (guildId, limit = 10) => db.getRecentAutomodInfractions(guildId, limit)
 
 module.exports.isPunishmentCoolingDown = (guildId, userId, triggerType) =>
   db.isAutomodCooldownActive(guildId, userId, triggerType)

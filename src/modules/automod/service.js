@@ -54,9 +54,49 @@ const detectBannedWords = (content, cfg) => {
 }
 
 const detectLinks = (content, cfg) => {
-  if (!cfg.rules.links.enabled) return null
+  const rule = cfg.rules.links
+  if (!rule.enabled) return null
+
   const urls = extract(content)
   const lowered = normalizeText(content)
+  const mode = rule.mode || "block_all_links"
+
+  const inviteMatch = /(discord\.gg|discord\.com\/invite)/i.test(lowered)
+  const whitelisted = new Set((rule.whitelistedDomains || []).map(x => String(x).toLowerCase()))
+  const shorteners = new Set((rule.shortenerDomains || []).map(x => String(x).toLowerCase()))
+
+  if (mode === "block_invites_only") {
+    if (!inviteMatch) return null
+    return {
+      type: "links",
+      ruleName: "Link Filter",
+      reason: "Invite links are blocked",
+      action: rule.action,
+      timeoutMs: rule.timeoutMs
+    }
+  }
+
+  if (mode === "block_shortened_urls") {
+    for (const url of urls) {
+      const host = (() => {
+        try {
+          return new URL(url.startsWith("http") ? url : `https://${url}`).hostname.toLowerCase()
+        } catch {
+          return ""
+        }
+      })()
+      if (host && shorteners.has(host)) {
+        return {
+          type: "links",
+          ruleName: "Link Filter",
+          reason: `Shortened URL blocked: ${host}`,
+          action: rule.action,
+          timeoutMs: rule.timeoutMs
+        }
+      }
+    }
+    return null
+  }
 
   if (!cfg.rules.links.allowDiscordInvites && /(discord\.gg|discord\.com\/invite)/i.test(lowered)) {
     return {
@@ -77,13 +117,35 @@ const detectLinks = (content, cfg) => {
       }
     })()
 
-    if (host && cfg.rules.links.blockedDomains.includes(host)) {
+    if (!host) continue
+
+    if (mode === "allow_whitelist_only" && !whitelisted.has(host)) {
+      return {
+        type: "links",
+        ruleName: "Link Filter",
+        reason: `Domain not whitelisted: ${host}`,
+        action: rule.action,
+        timeoutMs: rule.timeoutMs
+      }
+    }
+
+    if (mode === "block_all_links") {
+      return {
+        type: "links",
+        ruleName: "Link Filter",
+        reason: `Links are blocked: ${host}`,
+        action: rule.action,
+        timeoutMs: rule.timeoutMs
+      }
+    }
+
+    if (rule.blockedDomains.includes(host)) {
       return {
         type: "links",
         ruleName: "Link Filter",
         reason: `Blocked domain: ${host}`,
-        action: cfg.rules.links.action,
-        timeoutMs: cfg.rules.links.timeoutMs
+        action: rule.action,
+        timeoutMs: rule.timeoutMs
       }
     }
   }
@@ -137,8 +199,13 @@ const detectMessageSpam = (message, cfg) => {
       timeoutMs: rule.timeoutMs
     }
   }
+}
 
-  return null
+const resolveLogChannel = (guild, cfg) => {
+  const channelId = cfg.logChannelId || null
+  if (!channelId) return null
+  const channel = guild.channels.cache.get(channelId)
+  return channel && channel.isTextBased() ? channel : null
 }
 
 const detectCapsSpam = (content, cfg) => {

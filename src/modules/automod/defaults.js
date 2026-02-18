@@ -1,21 +1,27 @@
+const { SHORTENER_DOMAINS, uniqueNormalized } = require("./presets")
+
 module.exports = {
   enabled: true,
   logChannelId: null,
   trustedRoles: [],
   allowStaffBypass: true,
+  cooldownMs: 15000,
+  activeBannedWordPresets: [],
   rules: {
     bannedWords: {
       enabled: true,
       action: "delete_timeout",
       timeoutMs: 10 * 60 * 1000,
-      words: ["free nitro", "steam gift", "discord.gg/free-nitro"]
+      words: uniqueNormalized(["free nitro", "steam gift", "discord.gg/free-nitro"])
     },
     links: {
       enabled: true,
       action: "delete_timeout",
       timeoutMs: 10 * 60 * 1000,
+      mode: "block_all_links",
       blockedDomains: [],
-      allowDiscordInvites: false
+      whitelistedDomains: [],
+      shortenerDomains: SHORTENER_DOMAINS
     },
     mentionSpam: {
       enabled: true,
@@ -39,6 +45,5 @@ module.exports = {
       minLength: 12,
       maxUppercaseRatio: 0.75
     }
-  },
-  cooldownMs: 15000
+  }
 }
