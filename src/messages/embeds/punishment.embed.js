@@ -12,7 +12,7 @@ module.exports = data => {
       `> **Expires at:** ${data.expiresAt ? `<t:${data.expiresAt}:F>` : "N/A"}` +
       `> **Reason:** ${data.reason || "No reason provided"}`
     )
-    .setFooter({ text: `${data.footer || "Moderation Action"} • ${new Date().toISOString()}` })
+    .setFooter({ text: `${data.footer || "Moderation Action"}` })
     .setTimestamp()
 
   return embed

@@ -7,6 +7,6 @@ module.exports = ({ userMention, content, moderatorMention, color }) =>
     .setDescription(content || "No warnings found")
     .setColor(color || COLORS.info)
     .setFooter({
-      text: `Moderator: ${moderatorMention || "N/A"} • ${new Date().toISOString()}`
+      text: `Moderator: ${moderatorMention || "N/A"}}`
     })
     .setTimestamp()

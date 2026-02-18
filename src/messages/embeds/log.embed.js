@@ -21,7 +21,7 @@ module.exports = data => {
       `**Duration:** ${display(data?.duration || "N/A")}\n` +
       `**Expires at:** ${data?.expiresAt ? `<t:${data.expiresAt}:F>` : "N/A"}`
     )
-    .setFooter({ text: `Moderation Log • ${new Date().toISOString()}` })
+    .setFooter({ text: `Moderation Log` })
     .setTimestamp()
 
   if (automod) {
