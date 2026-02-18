@@ -424,6 +424,24 @@ module.exports = {
     return rows[0].count || 0
   },
 
+
+
+  async getRecentAutomodInfractions(guildId, limit = 10) {
+    await ensureAutomodTables()
+    const safeLimit = Math.max(1, Math.min(25, Number(limit) || 10))
+    const [rows] = await pool.query(
+      `
+      SELECT id, guild_id, user_id, trigger_type, reason, metadata, created_at
+      FROM automod_infractions
+      WHERE guild_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+      `,
+      [guildId, safeLimit]
+    )
+    return rows
+  },
+
   async isAutomodCooldownActive(guildId, userId, triggerType) {
     await ensureAutomodTables()
     const [rows] = await pool.query(

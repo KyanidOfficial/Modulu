@@ -3,22 +3,27 @@ const logModerationAction = require("../../utils/logModerationAction")
 const COLORS = require("../../utils/colors")
 const { extract } = require("../../utils/linkScanner")
 const { normalizeText } = require("./normalizer")
-const store = require("./store")
-const warningStore = require("./warnings.store")
-const { moderateContent } = require("./aiModeration")
 const { escapeMarkdownSafe } = require("../../utils/safeText")
+const store = require("./store")
 
-const recentMessages = new Map()
+const messageBuckets = new Map()
 
 const getBucket = (guildId, userId) => {
   const key = `${guildId}:${userId}`
-  if (!recentMessages.has(key)) recentMessages.set(key, [])
-  return recentMessages.get(key)
+  if (!messageBuckets.has(key)) messageBuckets.set(key, [])
+  return messageBuckets.get(key)
 }
 
-const compact = (list, windowMs) => {
+const compactBucket = (bucket, maxWindowMs) => {
   const now = Date.now()
-  while (list.length && now - list[0].ts > windowMs) list.shift()
+  while (bucket.length && now - bucket[0].ts > maxWindowMs) bucket.shift()
+}
+
+const safePreview = content => {
+  const normalized = String(content || "").replace(/\s+/g, " ").trim()
+  if (!normalized) return "[no text content]"
+  const escaped = escapeMarkdownSafe(normalized)
+  return escaped.length > 220 ? `${escaped.slice(0, 217)}...` : escaped
 }
 
 const safePreview = value => {
@@ -36,32 +41,39 @@ const hasBypass = (member, cfg) => {
   return false
 }
 
-const buildPatterns = cfg => {
-  const words = (cfg.blacklistWords || []).map(w => normalizeText(w.trim())).filter(Boolean)
-  const regex = (cfg.blacklistRegex || [])
-    .map(entry => {
-      try {
-        return new RegExp(entry, "iu")
-      } catch {
-        return null
-      }
-    })
-    .filter(Boolean)
-  return { words, regex }
-}
-
-const containsBlacklist = (content, patterns) => {
+const detectBannedWords = (content, cfg) => {
+  if (!cfg.rules.bannedWords.enabled) return null
   const normalized = normalizeText(content)
-  if (patterns.words.some(word => normalized.includes(word))) return true
-  if (patterns.regex.some(re => re.test(normalized))) return true
-  return false
+  for (const word of cfg.rules.bannedWords.words) {
+    const pattern = normalizeText(word)
+    if (!pattern) continue
+    if (normalized.includes(pattern)) {
+      return {
+        type: "bannedWords",
+        ruleName: "Banned Words",
+        reason: `Contains banned phrase: ${pattern}`,
+        action: cfg.rules.bannedWords.action,
+        timeoutMs: cfg.rules.bannedWords.timeoutMs
+      }
+    }
+  }
+  return null
 }
 
-const isInviteLike = normalized => /(discord\.gg|discord\.com\/invite|d1scord|disc0rd)\/?[a-z0-9-]+/i.test(normalized)
-
-const evaluateLinks = (content, cfg) => {
+const detectLinks = (content, cfg) => {
+  if (!cfg.rules.links.enabled) return null
   const urls = extract(content)
   const lowered = normalizeText(content)
+
+  if (!cfg.rules.links.allowDiscordInvites && /(discord\.gg|discord\.com\/invite)/i.test(lowered)) {
+    return {
+      type: "links",
+      ruleName: "Link Filter",
+      reason: "Discord invite links are blocked",
+      action: cfg.rules.links.action,
+      timeoutMs: cfg.rules.links.timeoutMs
+    }
+  }
 
   for (const url of urls) {
     const host = (() => {
@@ -72,297 +84,204 @@ const evaluateLinks = (content, cfg) => {
       }
     })()
 
-    if (cfg.links.blockedDomains.includes(host)) {
-      return { type: "malicious_link", rule: "blocked_domain", reason: `Blocked domain: ${host}`, url }
-    }
-
-    if (cfg.links.blockRedirectors && cfg.links.redirectorDomains.includes(host)) {
-      return { type: "malicious_link", rule: "redirector", reason: `Redirector blocked: ${host}`, url }
-    }
-  }
-
-  if (cfg.links.knownScamKeywords.some(keyword => lowered.includes(normalizeText(keyword)))) {
-    return { type: "malicious_link", rule: "scam_keyword", reason: "Potential scam keyword pattern" }
-  }
-
-  if (isInviteLike(lowered)) {
-    return { type: "invite", rule: "invite_link", reason: "Invite link or bypass pattern detected" }
-  }
-
-  return null
-}
-
-const evaluateCaps = (content, cfg) => {
-  const text = String(content || "")
-  const letters = text.replace(/[^a-z]/gi, "")
-  if (letters.length < (cfg.caps?.minLength || 12)) return null
-
-  const uppercase = letters.replace(/[^A-Z]/g, "")
-  const ratio = uppercase.length / letters.length
-  if (ratio >= (cfg.caps?.threshold || 0.75)) {
-    return {
-      type: "caps",
-      rule: "caps_ratio",
-      reason: `Excessive caps (${Math.round(ratio * 100)}%)`
+    if (host && cfg.rules.links.blockedDomains.includes(host)) {
+      return {
+        type: "links",
+        ruleName: "Link Filter",
+        reason: `Blocked domain: ${host}`,
+        action: cfg.rules.links.action,
+        timeoutMs: cfg.rules.links.timeoutMs
+      }
     }
   }
 
   return null
 }
 
-const evaluateSpam = (message, cfg) => {
-  const bucket = getBucket(message.guild.id, message.author.id)
-  bucket.push({ text: normalizeText(message.content || ""), ts: Date.now(), msg: message })
-  compact(bucket, Math.max(cfg.rateLimit.windowMs, cfg.spam.floodWindowMs))
-
+const detectMentionSpam = (message, cfg) => {
+  const rule = cfg.rules.mentionSpam
+  if (!rule.enabled) return null
   const mentionCount = message.mentions.users.size + message.mentions.roles.size
-  if (cfg.checks.mentions && mentionCount > cfg.spam.maxMentions) {
-    return { type: "spam", rule: "mention_spam", reason: `Excessive mentions (${mentionCount})` }
+  if (mentionCount <= rule.maxMentions) return null
+
+  return {
+    type: "mentionSpam",
+    ruleName: "Mention Spam",
+    reason: `Too many mentions (${mentionCount}/${rule.maxMentions})`,
+    action: rule.action,
+    timeoutMs: rule.timeoutMs
+  }
+}
+
+const detectMessageSpam = (message, cfg) => {
+  const rule = cfg.rules.messageSpam
+  if (!rule.enabled) return null
+
+  const bucket = getBucket(message.guild.id, message.author.id)
+  const normalized = normalizeText(message.content || "")
+  bucket.push({ ts: Date.now(), text: normalized })
+  compactBucket(bucket, Math.max(rule.windowMs, rule.duplicateWindowMs))
+
+  const inWindow = bucket.filter(x => Date.now() - x.ts <= rule.windowMs)
+  if (inWindow.length > rule.maxMessages) {
+    return {
+      type: "messageSpam",
+      ruleName: "Message Spam",
+      reason: `Rate exceeded (${inWindow.length}/${rule.maxMessages})`,
+      action: rule.action,
+      timeoutMs: rule.timeoutMs
+    }
   }
 
-  const recentFlood = bucket.filter(x => Date.now() - x.ts <= cfg.spam.floodWindowMs)
-  const sameCount = recentFlood.filter(x => x.text && x.text === normalizeText(message.content || "")).length
-  if (cfg.checks.spam && sameCount >= cfg.spam.maxRepeatedMessages) {
-    return { type: "spam", rule: "repeated_messages", reason: "Repeated message flood" }
-  }
-
-  const inWindow = bucket.filter(x => Date.now() - x.ts <= cfg.rateLimit.windowMs).length
-  if (cfg.checks.rateLimit && inWindow > cfg.rateLimit.maxMessages) {
-    return { type: "rate_limit", rule: "message_rate", reason: `Rate limit exceeded (${inWindow}/${cfg.rateLimit.maxMessages})` }
+  const dupWindow = bucket.filter(x => Date.now() - x.ts <= rule.duplicateWindowMs)
+  const duplicateCount = dupWindow.filter(x => x.text && x.text === normalized).length
+  if (duplicateCount >= rule.maxDuplicates) {
+    return {
+      type: "messageSpam",
+      ruleName: "Message Spam",
+      reason: `Repeated message spam (${duplicateCount}/${rule.maxDuplicates})`,
+      action: rule.action,
+      timeoutMs: rule.timeoutMs
+    }
   }
 
   return null
 }
 
-const logAutomod = async ({ message, action, trigger, reason, color, metadata = {} }) => {
+const detectCapsSpam = (content, cfg) => {
+  const rule = cfg.rules.capsSpam
+  if (!rule.enabled) return null
+
+  const letters = String(content || "").replace(/[^a-z]/gi, "")
+  if (letters.length < rule.minLength) return null
+
+  const upper = letters.replace(/[^A-Z]/g, "")
+  const ratio = upper.length / letters.length
+  if (ratio < rule.maxUppercaseRatio) return null
+
+  return {
+    type: "capsSpam",
+    ruleName: "Caps Spam",
+    reason: `Uppercase ratio too high (${Math.round(ratio * 100)}%)`,
+    action: rule.action,
+    timeoutMs: rule.timeoutMs
+  }
+}
+
+const resolveLogChannel = (guild, cfg) => {
+  const channelId = cfg.logChannelId || null
+  if (!channelId) return null
+  const channel = guild.channels.cache.get(channelId)
+  return channel && channel.isTextBased() ? channel : null
+}
+
+const logTrigger = async ({ message, cfg, trigger, actionTaken, extraMetadata = {}, color = COLORS.warning }) => {
   await logModerationAction({
     guild: message.guild,
-    action,
+    action: actionTaken,
     userId: message.author.id,
     moderatorId: message.guild.members.me?.id,
-    reason,
+    reason: trigger.reason,
     color,
     metadata: {
-      ...metadata,
-      trigger: trigger || null,
+      trigger,
+      ...extraMetadata,
       automod: {
-        ruleName: trigger?.rule || trigger?.type || "unknown",
-        triggerType: trigger?.type || "unknown",
-        actionTaken: action,
-        channelId: message.channel?.id || null,
-        messageId: message.id,
-        messagePreview: safePreview(message.content),
-        userId: message.author.id
+        ruleName: trigger.ruleName,
+        triggerType: trigger.type,
+        actionTaken,
+        channelId: message.channel.id,
+        userId: message.author.id,
+        messagePreview: safePreview(message.content)
       }
     }
   })
+
+  const logChannel = resolveLogChannel(message.guild, cfg)
+  if (logChannel) {
+    await logChannel.send({
+      embeds: [
+        {
+          title: "AutoMod Triggered",
+          color,
+          fields: [
+            { name: "User", value: `<@${message.author.id}>`, inline: true },
+            { name: "User ID", value: message.author.id, inline: true },
+            { name: "Channel", value: `<#${message.channel.id}>`, inline: true },
+            { name: "Rule", value: trigger.ruleName, inline: true },
+            { name: "Action", value: actionTaken, inline: true },
+            { name: "Reason", value: escapeMarkdownSafe(trigger.reason), inline: false },
+            { name: "Message Preview", value: safePreview(message.content), inline: false }
+          ],
+          timestamp: new Date().toISOString()
+        }
+      ]
+    }).catch(() => {})
+  }
 }
 
-const applyPunishment = async ({ message, cfg, trigger, aiResult }) => {
+const applyAction = async ({ message, cfg, trigger }) => {
   const guild = message.guild
   const member = message.member
-  const userId = message.author.id
+  const me = guild.members.me
+  if (!member || !me) return { blocked: false }
 
-  if (!member) return
+  const isCoolingDown = await store.isPunishmentCoolingDown(guild.id, message.author.id, trigger.type)
+  if (isCoolingDown) return { blocked: true }
 
-  const inCooldown = await store.isPunishmentCoolingDown(guild.id, userId, trigger.type)
-  if (inCooldown) {
-    await logAutomod({
-      message,
-      action: "automod_skipped",
-      trigger,
-      reason: `${trigger.reason} (cooldown active)`,
-      color: COLORS.info,
-      metadata: { ai: aiResult }
-    })
-    return
+  await store.setPunishmentCooldown(guild.id, message.author.id, trigger.type, cfg.cooldownMs)
+
+  if (!me.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
+    await logTrigger({ message, cfg, trigger, actionTaken: "permission_error", color: COLORS.error })
+    return { blocked: false }
   }
-
-  await store.setPunishmentCooldown(guild.id, userId, trigger.type, 10_000)
-
-  const botMember = guild.members.me
-  if (!botMember?.permissions.has(PermissionsBitField.Flags.ManageMessages)) {
-    await logAutomod({
-      message,
-      action: "automod_permission_error",
-      trigger,
-      reason: "Missing ManageMessages permission",
-      color: COLORS.error,
-      metadata: { ai: aiResult }
-    })
-    return
-  }
-
-  if (!member.moderatable) {
-    await logAutomod({
-      message,
-      action: "automod_block",
-      trigger,
-      reason: `${trigger.reason} (member not moderatable)`,
-      color: COLORS.error,
-      metadata: { ai: aiResult }
-    })
-    return
-  }
-
-  await store.addInfraction({ guildId: guild.id, userId, triggerType: trigger.type, reason: trigger.reason, metadata: { ai: aiResult } })
-  const points = await store.countInfractions(guild.id, userId, trigger.type, 1440)
-
-  const ladder = cfg.punishments[trigger.type] || cfg.punishments.default
-  const action = ladder[Math.min(points - 1, ladder.length - 1)]
-  const reason = `[AutoMod:${trigger.type}] ${trigger.reason}`
 
   try {
     await message.delete()
   } catch {
-    await logAutomod({
+    await logTrigger({ message, cfg, trigger, actionTaken: "delete_failed", color: COLORS.error })
+    return { blocked: false }
+  }
+
+  await store.addInfraction({
+    guildId: guild.id,
+    userId: message.author.id,
+    triggerType: trigger.type,
+    reason: trigger.reason,
+    metadata: {
+      automod: {
+        ruleName: trigger.ruleName,
+        actionRequested: trigger.action,
+        messagePreview: safePreview(message.content),
+        channelId: message.channel.id
+      }
+    }
+  })
+
+  if (trigger.action === "delete_only") {
+    await logTrigger({ message, cfg, trigger, actionTaken: "delete_only", color: COLORS.warning })
+    return { blocked: true }
+  }
+
+  if (!me.permissions.has(PermissionsBitField.Flags.ModerateMembers) || !member.moderatable) {
+    await logTrigger({ message, cfg, trigger, actionTaken: "delete_only_permission_fallback", color: COLORS.warning })
+    return { blocked: true }
+  }
+
+  try {
+    await member.timeout(trigger.timeoutMs, `[AutoMod] ${trigger.reason}`)
+    await logTrigger({
       message,
-      action: "automod_delete_failed",
+      cfg,
       trigger,
-      reason: `${reason} (failed to delete message)`,
-      color: COLORS.error,
-      metadata: { ai: aiResult, points }
+      actionTaken: `delete_timeout (${Math.floor(trigger.timeoutMs / 60000)}m)`,
+      color: COLORS.warning
     })
-    return
+  } catch {
+    await logTrigger({ message, cfg, trigger, actionTaken: "delete_only_timeout_failed", color: COLORS.warning })
   }
 
-  if (action === "warn") {
-    try {
-      const warningId = await warningStore.createWarning({
-        guildId: guild.id,
-        userId,
-        moderatorId: guild.members.me?.id || "0",
-        reason,
-        source: "automod"
-      })
-      const totalWarnings = await warningStore.countWarnings(guild.id, userId)
-      await logAutomod({
-        message,
-        action: "warn",
-        trigger,
-        reason,
-        color: COLORS.warning,
-        metadata: { ai: aiResult, points, warningId, warningCount: totalWarnings }
-      })
-    } catch (err) {
-      await logAutomod({
-        message,
-        action: "warn_failed",
-        trigger,
-        reason: `${reason} (persist failed)`,
-        color: COLORS.error,
-        metadata: { ai: aiResult, points, error: err?.message }
-      })
-    }
-  }
-
-  if (action === "mute") {
-    const duration = points > 2 ? cfg.timeouts.longMuteMs : cfg.timeouts.muteMs
-    if (!botMember.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-      await logAutomod({
-        message,
-        action: "automod_permission_error",
-        trigger,
-        reason: `${reason} (missing ModerateMembers permission)`,
-        color: COLORS.error,
-        metadata: { ai: aiResult, points }
-      })
-      return
-    }
-
-    try {
-      await member.timeout(duration, reason)
-      await logAutomod({
-        message,
-        action: "timeout",
-        trigger,
-        reason,
-        color: COLORS.warning,
-        metadata: { ai: aiResult, points, duration: `${Math.round(duration / 60000)}m` }
-      })
-    } catch (err) {
-      await logAutomod({
-        message,
-        action: "timeout_failed",
-        trigger,
-        reason: `${reason} (failed to timeout member)`,
-        color: COLORS.error,
-        metadata: { ai: aiResult, points, error: err?.message }
-      })
-    }
-  }
-
-  if (action === "kick") {
-    if (!botMember.permissions.has(PermissionsBitField.Flags.KickMembers) || !member.kickable) {
-      await logAutomod({
-        message,
-        action: "automod_permission_error",
-        trigger,
-        reason: `${reason} (cannot kick member)`,
-        color: COLORS.error,
-        metadata: { ai: aiResult, points }
-      })
-      return
-    }
-
-    try {
-      await member.kick(reason)
-      await logAutomod({
-        message,
-        action: "kick",
-        trigger,
-        reason,
-        color: COLORS.error,
-        metadata: { ai: aiResult, points }
-      })
-    } catch (err) {
-      await logAutomod({
-        message,
-        action: "kick_failed",
-        trigger,
-        reason: `${reason} (failed to kick member)`,
-        color: COLORS.error,
-        metadata: { ai: aiResult, points, error: err?.message }
-      })
-    }
-  }
-
-  if (action === "ban") {
-    if (!botMember.permissions.has(PermissionsBitField.Flags.BanMembers) || !member.bannable) {
-      await logAutomod({
-        message,
-        action: "automod_permission_error",
-        trigger,
-        reason: `${reason} (cannot ban member)`,
-        color: COLORS.error,
-        metadata: { ai: aiResult, points }
-      })
-      return
-    }
-
-    try {
-      await member.ban({ reason, deleteMessageSeconds: 60 * 60 })
-      await logAutomod({
-        message,
-        action: "ban",
-        trigger,
-        reason,
-        color: COLORS.error,
-        metadata: { ai: aiResult, points }
-      })
-    } catch (err) {
-      await logAutomod({
-        message,
-        action: "ban_failed",
-        trigger,
-        reason: `${reason} (failed to ban member)`,
-        color: COLORS.error,
-        metadata: { ai: aiResult, points, error: err?.message }
-      })
-    }
-  }
-
-  await store.setPunishmentCooldown(guild.id, userId, trigger.type, cfg.rateLimit.cooldownMs)
+  return { blocked: true }
 }
 
 module.exports.handleMessage = async message => {
@@ -372,77 +291,18 @@ module.exports.handleMessage = async message => {
     const cfg = await store.getConfig(message.guild.id)
     if (!cfg.enabled || hasBypass(message.member, cfg)) return { blocked: false }
 
-    const patterns = buildPatterns(cfg)
-    const checks = []
+    const triggers = [
+      detectBannedWords(message.content || "", cfg),
+      detectLinks(message.content || "", cfg),
+      detectMentionSpam(message, cfg),
+      detectMessageSpam(message, cfg),
+      detectCapsSpam(message.content || "", cfg)
+    ].filter(Boolean)
 
-    if (cfg.checks.blacklist && containsBlacklist(message.content || "", patterns)) {
-      checks.push({ type: "blacklist", rule: "blacklist", reason: "Blacklisted word/pattern detected" })
-    }
+    if (!triggers.length) return { blocked: false }
 
-    if (cfg.checks.links || cfg.checks.invites) {
-      const link = evaluateLinks(message.content || "", cfg)
-      if (link) checks.push(link)
-    }
-
-    if (cfg.checks.spam || cfg.checks.rateLimit || cfg.checks.mentions) {
-      const spam = evaluateSpam(message, cfg)
-      if (spam) checks.push(spam)
-    }
-
-    if (cfg.checks.caps) {
-      const caps = evaluateCaps(message.content || "", cfg)
-      if (caps) checks.push(caps)
-    }
-
-    if (cfg.checks.attachments && message.attachments.size > 0) {
-      for (const attachment of message.attachments.values()) {
-        if (!attachment.contentType?.startsWith("image/")) continue
-        checks.push({ type: "explicit_attachment", rule: "attachment_image", reason: "Image attachment requires moderation", imageUrl: attachment.url })
-      }
-    }
-
-    if (!checks.length) return { blocked: false }
-
-    const candidate = checks[0]
-    const aiResult = cfg.checks.aiModeration
-      ? await moderateContent({ text: message.content, imageUrl: candidate.imageUrl, category: candidate.type })
-      : { skipped: true, reason: "AI moderation disabled" }
-
-    if (cfg.checks.aiModeration && !aiResult.skipped && !aiResult.flagged) {
-      await logAutomod({
-        message,
-        action: "automod_review",
-        trigger: candidate,
-        reason: `Trigger matched but AI moderation did not flag: ${candidate.reason}`,
-        color: COLORS.info,
-        metadata: { ai: aiResult }
-      })
-      return { blocked: false }
-    }
-
-    await applyPunishment({ message, cfg, trigger: candidate, aiResult })
-    return { blocked: true, reason: candidate.reason }
-  } catch (err) {
-    if (message?.guild) {
-      await logModerationAction({
-        guild: message.guild,
-        action: "automod_internal_error",
-        userId: message.author?.id,
-        moderatorId: message.guild.members.me?.id,
-        reason: "Unhandled AutoMod exception",
-        color: COLORS.error,
-        metadata: {
-          error: err?.message,
-          automod: {
-            channelId: message.channel?.id || null,
-            messageId: message.id,
-            messagePreview: safePreview(message.content),
-            userId: message.author?.id
-          }
-        }
-      })
-    }
-
+    return await applyAction({ message, cfg, trigger: triggers[0] })
+  } catch {
     return { blocked: false }
   }
 }

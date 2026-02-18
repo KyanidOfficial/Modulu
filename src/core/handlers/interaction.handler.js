@@ -17,6 +17,7 @@ const COLORS = require("../../utils/colors")
 const staffTimeButtons = require("./staffTime.buttons")
 const handleApplications = require("../../modules/applications/handlers")
 const { requireEnabled } = require("../../utils/commandToggle")
+const handleAutomodPanel = require("../../modules/automod/panel.handlers")
 
 const GLOBAL_FEEDBACK_CHANNEL = "1456085711802335353"
 const FEEDBACK_COOLDOWN = 1000 * 60 * 60
@@ -35,10 +36,16 @@ module.exports = async (client, interaction) => {
     if (
       interaction.isButton() ||
       interaction.isStringSelectMenu() ||
+      interaction.isChannelSelectMenu() ||
       interaction.isModalSubmit()
     ) {
       if (interaction.customId?.startsWith("apps:")) {
         await handleApplications(interaction)
+        return
+      }
+
+      if (interaction.customId?.startsWith("automod:")) {
+        await handleAutomodPanel(interaction)
         return
       }
     }
