@@ -1,8 +1,9 @@
-const db = require("./mysql")
+const { getPool } = require("./mysql")
 
 module.exports = {
   async get(guildId) {
-    const [rows] = await db.query(
+    const pool = getPool()
+    const [rows] = await pool.query(
       "SELECT * FROM join_gates WHERE guild_id = ?",
       [guildId]
     )
@@ -21,7 +22,8 @@ module.exports = {
   },
 
   async save(guildId, data) {
-    await db.query(
+    const pool = getPool()
+    await pool.query(
       `INSERT INTO join_gates
        (guild_id, enabled, account_age_days, require_avatar, category_id)
        VALUES (?, ?, ?, ?, ?)

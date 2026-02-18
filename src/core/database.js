@@ -4,6 +4,17 @@ let moderationLogsReady = false
 let automodTablesReady = false
 let warningTablesReady = false
 
+
+const safeJsonStringify = value => {
+  if (value === undefined) return null
+
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return JSON.stringify({ serializationError: true })
+  }
+}
+
 const ensureWarningTables = async () => {
   if (warningTablesReady) return
 
@@ -359,7 +370,7 @@ module.exports = {
         userId || null,
         moderatorId || null,
         reason || null,
-        metadata ? JSON.stringify(metadata) : null
+        safeJsonStringify(metadata)
       ]
     )
     return result.insertId
@@ -395,7 +406,7 @@ module.exports = {
         (guild_id, user_id, trigger_type, reason, metadata)
       VALUES (?, ?, ?, ?, ?)
       `,
-      [guildId, userId, triggerType, reason || null, metadata ? JSON.stringify(metadata) : null]
+      [guildId, userId, triggerType, reason || null, safeJsonStringify(metadata)]
     )
   },
 
@@ -419,16 +430,17 @@ module.exports = {
 
   async getRecentAutomodInfractions(guildId, limit = 10) {
     await ensureAutomodTables()
-    const safeLimit = Math.max(1, Math.min(25, Number(limit) || 10))
+    const parsedLimit = Number.parseInt(String(limit), 10)
+    const safeLimit = Math.max(1, Math.min(25, Number.isFinite(parsedLimit) ? parsedLimit : 10))
     const [rows] = await executeQuery(
       `
       SELECT id, guild_id, user_id, trigger_type, reason, metadata, created_at
       FROM automod_infractions
       WHERE guild_id = ?
       ORDER BY created_at DESC
-      LIMIT ?
+      LIMIT ${safeLimit}
       `,
-      [guildId, safeLimit]
+      [guildId]
     )
     return rows
   },

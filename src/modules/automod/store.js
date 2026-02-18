@@ -15,17 +15,53 @@ const merge = (target, source) => {
 }
 
 module.exports.getConfig = async guildId => {
-  const stored = await db.getAutomodConfig(guildId)
-  return merge(defaults, stored || {})
+  try {
+    const stored = await db.getAutomodConfig(guildId)
+    return merge(defaults, stored || {})
+  } catch {
+    return merge(defaults, {})
+  }
 }
 
-module.exports.saveConfig = (guildId, config) => db.saveAutomodConfig(guildId, config)
+module.exports.saveConfig = async (guildId, config) => {
+  try {
+    await db.saveAutomodConfig(guildId, config)
+    return true
+  } catch {
+    return false
+  }
+}
 
-module.exports.addInfraction = payload => db.addAutomodInfraction(payload)
-module.exports.getRecentInfractions = (guildId, limit = 10) => db.getRecentAutomodInfractions(guildId, limit)
+module.exports.addInfraction = async payload => {
+  try {
+    await db.addAutomodInfraction(payload)
+    return true
+  } catch {
+    return false
+  }
+}
 
-module.exports.isPunishmentCoolingDown = (guildId, userId, triggerType) =>
-  db.isAutomodCooldownActive(guildId, userId, triggerType)
+module.exports.getRecentInfractions = async (guildId, limit = 10) => {
+  try {
+    return await db.getRecentAutomodInfractions(guildId, limit)
+  } catch {
+    return []
+  }
+}
 
-module.exports.setPunishmentCooldown = (guildId, userId, triggerType, cooldownMs) =>
-  db.setAutomodCooldown(guildId, userId, triggerType, cooldownMs)
+module.exports.isPunishmentCoolingDown = async (guildId, userId, triggerType) => {
+  try {
+    return await db.isAutomodCooldownActive(guildId, userId, triggerType)
+  } catch {
+    return false
+  }
+}
+
+module.exports.setPunishmentCooldown = async (guildId, userId, triggerType, cooldownMs) => {
+  try {
+    await db.setAutomodCooldown(guildId, userId, triggerType, cooldownMs)
+    return true
+  } catch {
+    return false
+  }
+}

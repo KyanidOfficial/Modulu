@@ -69,13 +69,32 @@ const withConnection = async operation => {
   }
 }
 
+const normalizeParams = params => {
+  if (Array.isArray(params)) return params
+  if (params === undefined || params === null) return []
+  return [params]
+}
+
+const countPlaceholders = sql => {
+  const stripped = String(sql || "").replace(/'[^']*'|"[^"]*"|`[^`]*`/g, "")
+  return (stripped.match(/\?/g) || []).length
+}
+
 const executeQuery = async (sql, params = []) => {
-  const result = await withConnection(async connection => connection.execute(sql, params))
+  const boundParams = normalizeParams(params)
+  const expectedParams = countPlaceholders(sql)
+
+  if (expectedParams !== boundParams.length) {
+    const error = new Error(`SQL placeholder mismatch: expected ${expectedParams}, received ${boundParams.length}`)
+    error.code = "SQL_PLACEHOLDER_MISMATCH"
+    error.sql = String(sql || "").trim().slice(0, 240)
+    throw error
+  }
+
+  const result = await withConnection(async connection => connection.execute(sql, boundParams))
   if (!result) return [[], { affectedRows: 0 }]
   return result
 }
-
-
 
 const __setPoolForTests = pool => {
   sharedPool = pool

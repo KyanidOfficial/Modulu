@@ -1,6 +1,5 @@
 require("dotenv").config()
 require("./core/workers/violationCleanup")()
-require("./core/workers/spamCleanup")()
 const client = require("./client")
 const bootstrap = require("./bootstrap")
 

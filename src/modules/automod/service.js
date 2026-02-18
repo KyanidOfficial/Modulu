@@ -27,9 +27,10 @@ const ensureWindow = (guildId, userId) => {
   const key = `${guildId}:${userId}`
   const existing = userMessageWindows.get(key)
   if (existing) return existing
-  const window = []
-  userMessageWindows.set(key, window)
-  return window
+
+  const created = []
+  userMessageWindows.set(key, created)
+  return created
 }
 
 const pruneWindow = (window, maxAgeMs) => {
@@ -59,9 +60,8 @@ const getRootDomain = host => {
   if (parts.length <= 2) return normalized
 
   const lastTwo = parts.slice(-2).join(".")
-  const lastThree = parts.slice(-3).join(".")
   if (MULTI_PART_TLDS.has(lastTwo) && parts.length >= 3) {
-    return lastThree
+    return parts.slice(-3).join(".")
   }
 
   return lastTwo
@@ -70,12 +70,14 @@ const getRootDomain = host => {
 const isDomainMatch = (host, domain) => {
   const normalizedHost = normalizeHost(host)
   const normalizedDomain = normalizeHost(domain)
+
   if (!normalizedHost || !normalizedDomain) return false
   return normalizedHost === normalizedDomain || normalizedHost.endsWith(`.${normalizedDomain}`)
 }
 
 const isInDomainList = (host, domains) => {
   if (!host || !domains?.length) return false
+
   const normalizedHost = normalizeHost(host)
   const root = getRootDomain(normalizedHost)
   return domains.some(domain => isDomainMatch(normalizedHost, domain) || isDomainMatch(root, domain))
@@ -83,6 +85,7 @@ const isInDomainList = (host, domains) => {
 
 const parseHostFromUrl = rawUrl => {
   if (!rawUrl) return ""
+
   try {
     const parsed = new URL(rawUrl.startsWith("http") ? rawUrl : `https://${rawUrl}`)
     return normalizeHost(parsed.hostname)
@@ -99,12 +102,13 @@ const containsKnownScamKeyword = (content, keywords = []) => {
   })
 }
 
-const createResult = ({ score, type, reason, timeoutMs = 0, metadata = {} }) => ({
+const createResult = ({ score, type, reason, timeoutMs = 0, metadata = {}, enforcedAction = null }) => ({
   score,
   type,
   reason,
   timeoutMs,
-  metadata
+  metadata,
+  enforcedAction
 })
 
 const hasBypass = (message, cfg) => {
@@ -130,6 +134,7 @@ const isIgnoredContext = (message, cfg) => {
 const isCommandMessage = message => {
   const content = String(message.content || "").trim()
   if (!content) return false
+
   const prefix = message.client?.config?.prefix || COMMAND_PREFIX_FALLBACK
   return content.startsWith(prefix)
 }
@@ -149,12 +154,14 @@ const normalizeComparableMessage = content =>
 
 const similarityRatio = values => {
   if (values.length < 2) return 0
-  const freq = new Map()
+
+  const frequency = new Map()
   for (const value of values) {
-    freq.set(value, (freq.get(value) || 0) + 1)
+    frequency.set(value, (frequency.get(value) || 0) + 1)
   }
-  const max = Math.max(...freq.values())
-  return max / values.length
+
+  const maxOccurrence = Math.max(...frequency.values())
+  return maxOccurrence / values.length
 }
 
 const detectBannedWords = (message, cfg) => {
@@ -165,6 +172,7 @@ const detectBannedWords = (message, cfg) => {
   for (const word of rule.words || []) {
     const probe = normalizeText(word)
     if (!probe) continue
+
     if (normalized.includes(probe)) {
       return createResult({
         score: rule.score ?? 10,
@@ -191,7 +199,6 @@ const detectLinks = (message, cfg) => {
   const shortenerDomains = (rule.shortenerDomains || []).map(normalizeHost)
   const redirectorDomains = (rule.redirectorDomains || []).map(normalizeHost)
   const scamKeywords = rule.knownScamKeywords || []
-
   const hasScamKeyword = containsKnownScamKeyword(message.content || "", scamKeywords)
 
   for (const rawUrl of urls) {
@@ -208,23 +215,23 @@ const detectLinks = (message, cfg) => {
         type: "links",
         reason: `Blocked domain: ${host}`,
         timeoutMs: rule.timeoutMs ?? 0,
+        enforcedAction: "delete",
         metadata: { host, reasonType: "blocked_domain" }
       })
     }
 
-    const inviteDetected = INVITE_RE.test(rawUrl)
-    if (inviteDetected && rule.allowDiscordInvites === false) {
+    if (INVITE_RE.test(rawUrl) && rule.allowDiscordInvites === false) {
       return createResult({
         score: rule.scoreInvite ?? 10,
         type: "links",
         reason: `Discord invite blocked: ${host}`,
         timeoutMs: rule.timeoutMs ?? 0,
+        enforcedAction: "delete",
         metadata: { host, reasonType: "discord_invite" }
       })
     }
 
-    const shouldBlockRedirectors = rule.blockRedirectors === true
-    if (shouldBlockRedirectors && (isInDomainList(host, shortenerDomains) || isInDomainList(host, redirectorDomains))) {
+    if (rule.blockRedirectors === true && (isInDomainList(host, shortenerDomains) || isInDomainList(host, redirectorDomains))) {
       return createResult({
         score: rule.scoreRedirector ?? 8,
         type: "links",
@@ -253,12 +260,13 @@ const detectMentionSpam = (message, cfg) => {
   if (!rule?.enabled) return null
 
   const mentionCount = message.mentions.users.size + message.mentions.roles.size
-  if (mentionCount <= (rule.maxMentions ?? 5)) return null
+  const maxMentions = rule.maxMentions ?? 5
+  if (mentionCount <= maxMentions) return null
 
   return createResult({
-    score: rule.score ?? 6,
+    score: rule.score ?? 10,
     type: "mention_spam",
-    reason: `Too many mentions (${mentionCount}/${rule.maxMentions ?? 5})`,
+    reason: `Too many mentions (${mentionCount}/${maxMentions})`,
     timeoutMs: rule.timeoutMs ?? 0,
     metadata: { mentionCount }
   })
@@ -271,23 +279,35 @@ const detectMessageSpam = (message, cfg) => {
   if (isCommandMessage(message)) return null
   if (isAttachmentsOnly(message)) return null
 
-  const raw = String(message.content || "")
-  const comparable = normalizeComparableMessage(raw)
+  const comparable = normalizeComparableMessage(message.content || "")
   const minLength = rule.minMessageLength ?? 5
   if (comparable.length < minLength) return null
 
   const now = Date.now()
   const window = ensureWindow(message.guild.id, message.author.id)
-  window.push({ ts: now, text: comparable, mentionCount: message.mentions.users.size + message.mentions.roles.size })
-
-  const longestWindowMs = Math.max(rule.windowMs ?? 15000, rule.duplicateWindowMs ?? 15000, TRACKING_RETENTION_MS)
-  pruneWindow(window, longestWindowMs)
+  window.push({
+    ts: now,
+    text: comparable,
+    mentionCount: message.mentions.users.size + message.mentions.roles.size
+  })
 
   const windowMs = rule.windowMs ?? 15000
   const duplicateWindowMs = rule.duplicateWindowMs ?? 15000
-  const scoped = window.filter(entry => now - entry.ts <= windowMs)
+  const retentionMs = Math.max(windowMs, duplicateWindowMs, TRACKING_RETENTION_MS)
+  pruneWindow(window, retentionMs)
 
-  const rateExceeded = scoped.length >= (rule.maxMessages ?? 10)
+  const scoped = window.filter(entry => now - entry.ts <= windowMs)
+  const duplicateScoped = window.filter(entry => now - entry.ts <= duplicateWindowMs)
+
+  const duplicateCounts = new Map()
+  for (const entry of duplicateScoped) {
+    duplicateCounts.set(entry.text, (duplicateCounts.get(entry.text) || 0) + 1)
+  }
+  const maxDuplicates = duplicateCounts.size ? Math.max(...duplicateCounts.values()) : 0
+
+  const repeatTimeoutCount = rule.repeatTimeoutCount ?? 6
+  const maxMessages = rule.maxMessages ?? 10
+  const rateExceeded = scoped.length >= maxMessages || maxDuplicates >= repeatTimeoutCount
   if (!rateExceeded) return null
 
   const comparableTexts = scoped.map(entry => entry.text).filter(text => text.length >= minLength)
@@ -298,25 +318,29 @@ const detectMessageSpam = (message, cfg) => {
   const similarityExceeded = similarity >= similarityThreshold
   if (!similarityExceeded) return null
 
-  const duplicateScoped = window.filter(entry => now - entry.ts <= duplicateWindowMs)
-  const duplicateCounts = new Map()
-  for (const entry of duplicateScoped) {
-    duplicateCounts.set(entry.text, (duplicateCounts.get(entry.text) || 0) + 1)
-  }
-  const maxDuplicates = duplicateCounts.size ? Math.max(...duplicateCounts.values()) : 0
-  const duplicateExceeded = maxDuplicates >= (rule.maxDuplicates ?? 3)
+  const duplicateExceeded = maxDuplicates >= (rule.maxDuplicates ?? 4)
+  const severeDuplicateSpam = maxDuplicates >= repeatTimeoutCount
+
+  const score =
+    (rule.scoreRate ?? 5) +
+    (rule.scoreSimilarity ?? 5) +
+    (duplicateExceeded ? (rule.scoreDuplicate ?? 2) : 0) +
+    (severeDuplicateSpam ? (rule.scoreSevereDuplicate ?? 5) : 0)
 
   return createResult({
-    score: (rule.scoreRate ?? 5) + (rule.scoreSimilarity ?? 5) + (duplicateExceeded ? (rule.scoreDuplicate ?? 2) : 0),
+    score,
     type: "message_spam",
-    reason: `Rate exceeded (${scoped.length}/${rule.maxMessages ?? 10}) and similarity high (${similarity.toFixed(2)}/${similarityThreshold})`,
+    reason: `Rate exceeded (${scoped.length}/${maxMessages}) and similarity high (${similarity.toFixed(2)}/${similarityThreshold})`,
     timeoutMs: rule.timeoutMs ?? 0,
+    enforcedAction: severeDuplicateSpam ? "delete_timeout" : null,
     metadata: {
       messageCount: scoped.length,
+      maxMessages,
       similarity,
       similarityThreshold,
       maxDuplicates,
       duplicateExceeded,
+      severeDuplicateSpam,
       rateExceeded
     }
   })
@@ -334,7 +358,8 @@ const detectCapsSpam = (message, cfg) => {
 
   const sanitized = stripCapsIgnoredSegments(message.content || "")
   const lettersOnly = sanitized.replace(/[^a-z]/gi, "")
-  if (lettersOnly.length < (rule.minLength ?? 20)) return null
+  const minLength = rule.minLength ?? 20
+  if (lettersOnly.length < minLength) return null
 
   const uppercaseCount = lettersOnly.replace(/[^A-Z]/g, "").length
   const uppercaseRatio = uppercaseCount / lettersOnly.length
@@ -350,6 +375,28 @@ const detectCapsSpam = (message, cfg) => {
   })
 }
 
+const determineActionFromThresholds = (score, cfg) => {
+  const thresholds = cfg.scoreThresholds || {}
+  const warnThreshold = thresholds.warn ?? 5
+  const deleteThreshold = thresholds.delete ?? 10
+  const timeoutThreshold = thresholds.timeout ?? 15
+
+  if (score >= timeoutThreshold) return "delete_timeout"
+  if (score >= deleteThreshold) return "delete"
+  if (score >= warnThreshold) return "warn"
+  return "ignore"
+}
+
+const actionPriority = {
+  ignore: 0,
+  warn: 1,
+  delete: 2,
+  delete_timeout: 3
+}
+
+const strongerAction = (left, right) =>
+  (actionPriority[right] || 0) > (actionPriority[left] || 0) ? right : left
+
 const evaluateMessage = (message, cfg) => {
   const detectors = [
     detectBannedWords(message, cfg),
@@ -359,22 +406,18 @@ const evaluateMessage = (message, cfg) => {
     detectCapsSpam(message, cfg)
   ].filter(Boolean)
 
-  const score = detectors.reduce((sum, item) => sum + item.score, 0)
-  const thresholds = cfg.scoreThresholds || {}
-  const warnThreshold = thresholds.warn ?? 5
-  const deleteThreshold = thresholds.delete ?? 10
-  const timeoutThreshold = thresholds.timeout ?? 15
-
-  let action = "ignore"
-  if (score >= timeoutThreshold) action = "delete_timeout"
-  else if (score >= deleteThreshold) action = "delete"
-  else if (score >= warnThreshold) action = "warn"
+  const score = detectors.reduce((sum, result) => sum + result.score, 0)
+  const thresholdAction = determineActionFromThresholds(score, cfg)
+  const detectorAction = detectors.reduce(
+    (selected, detector) => strongerAction(selected, detector.enforcedAction || "ignore"),
+    "ignore"
+  )
 
   return {
     score,
-    action,
+    action: strongerAction(thresholdAction, detectorAction),
     detectors,
-    summary: detectors.map(item => `${item.type}: ${item.reason}`).join(" | ") || "No violations"
+    summary: detectors.map(detector => `${detector.type}: ${detector.reason}`).join(" | ") || "No violations"
   }
 }
 
@@ -439,7 +482,7 @@ const logAction = async ({ message, evaluation, action }) => {
       }
     })
   } catch {
-    // no-op to avoid messageCreate instability
+    // no-op
   }
 }
 
@@ -448,15 +491,15 @@ const persistInfraction = async (message, evaluation, action) => {
     await store.addInfraction({
       guildId: message.guild.id,
       userId: message.author.id,
-      triggerType: evaluation.detectors.map(d => d.type).join("+") || "none",
+      triggerType: evaluation.detectors.map(detector => detector.type).join("+") || "none",
       reason: evaluation.summary,
       metadata: {
         automod: {
           score: evaluation.score,
-          detectors: evaluation.detectors,
           action,
           channelId: message.channel.id,
-          messageId: message.id
+          messageId: message.id,
+          detectors: evaluation.detectors
         }
       }
     })
@@ -465,7 +508,7 @@ const persistInfraction = async (message, evaluation, action) => {
   }
 }
 
-const applyAction = async (message, cfg, evaluation) => {
+const applyAction = async (message, evaluation) => {
   if (evaluation.action === "ignore") return { blocked: false, action: "ignore" }
 
   if (evaluation.action === "warn") {
@@ -491,7 +534,7 @@ const applyAction = async (message, cfg, evaluation) => {
     return { blocked: true, action: "delete" }
   }
 
-  const timeoutMs = Math.max(60_000, ...evaluation.detectors.map(item => item.timeoutMs || 0))
+  const timeoutMs = Math.max(60_000, ...evaluation.detectors.map(detector => detector.timeoutMs || 0))
   if (!canTimeoutMember(message.guild, message.member)) {
     await logAction({ message, evaluation, action: "delete" })
     return { blocked: true, action: "delete" }
@@ -531,7 +574,7 @@ module.exports.handleMessage = async message => {
   const evaluation = evaluateMessage(message, cfg)
 
   try {
-    const result = await applyAction(message, cfg, evaluation)
+    const result = await applyAction(message, evaluation)
     return {
       blocked: result.blocked,
       action: result.action,

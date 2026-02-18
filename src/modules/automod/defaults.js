@@ -32,9 +32,9 @@ module.exports = {
       allowDiscordInvites: false,
       blockRedirectors: true,
       scoreInvite: 10,
-      scoreBlockedDomain: 8,
-      scoreRedirector: 6,
-      scoreScamKeyword: 8,
+      scoreBlockedDomain: 10,
+      scoreRedirector: 8,
+      scoreScamKeyword: 9,
       blockedDomains: [],
       whitelistedDomains: [],
       shortenerDomains: SHORTENER_DOMAINS,
@@ -45,7 +45,7 @@ module.exports = {
       enabled: true,
       action: "delete_timeout",
       timeoutMs: 10 * 60 * 1000,
-      score: 6,
+      score: 10,
       maxMentions: 5
     },
     messageSpam: {
@@ -61,7 +61,9 @@ module.exports = {
       minMessageLength: 5,
       scoreRate: 5,
       scoreSimilarity: 5,
-      scoreDuplicate: 2
+      scoreDuplicate: 2,
+      scoreSevereDuplicate: 5,
+      repeatTimeoutCount: 6
     },
     capsSpam: {
       enabled: true,
