@@ -1,5 +1,6 @@
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
 const { handleRiskSlash } = require("../../../core/risk/panel/runtime")
+const { getRiskRuntimeStatus } = require("../../../core/risk/runtime")
 
 module.exports = {
   data: new SlashCommandBuilder()
@@ -20,6 +21,16 @@ module.exports = {
   skipDefer: true,
 
   async execute(interaction) {
+    if (!interaction.client.riskEngine) {
+      const runtime = getRiskRuntimeStatus()
+      const message = runtime.errorCode === "DIST_MISSING_AFTER_BUILD"
+        ? "Risk build artifacts are missing after auto-build attempt. Check startup logs."
+        : "RiskEngine failed to initialize. Check startup logs."
+
+      await interaction.reply({ content: message, ephemeral: true })
+      return
+    }
+
     await handleRiskSlash(interaction, interaction.client.riskEngine)
   }
 }

@@ -1,16 +1,34 @@
-const path = require("path")
+const fs = require("node:fs")
+const path = require("node:path")
+const { getRiskRuntimeStatus } = require("../runtime")
+
+const panelPath = path.resolve(__dirname, "../../../../dist/risk/panel/RiskPanelController.js")
 
 const loadPanel = () => {
+  if (!fs.existsSync(panelPath)) {
+    return { mod: null, missing: true }
+  }
+
   try {
     // eslint-disable-next-line global-require, import/no-dynamic-require
-    return require(path.join(__dirname, "../../../../dist/panel/RiskPanelController.js"))
-  } catch {
-    return null
+    const mod = require(panelPath)
+    return { mod, missing: false }
+  } catch (error) {
+    console.error(`[RISK] Failed to load panel module at ${panelPath}`)
+    console.error(error)
+    return { mod: null, missing: false }
   }
 }
 
 const replyUnavailable = async interaction => {
-  const payload = { content: "Risk panel is not built yet. Run `npm run build:risk`.", ephemeral: true }
+  const runtime = getRiskRuntimeStatus()
+  const missingBuild = runtime.errorCode === "DIST_MISSING_AFTER_BUILD"
+
+  const content = missingBuild
+    ? "Risk build artifacts are missing after auto-build attempt. Check startup logs."
+    : "RiskEngine failed to initialize. Check startup logs."
+
+  const payload = { content, ephemeral: true }
   if (interaction.deferred || interaction.replied) {
     await interaction.followUp(payload).catch(() => {})
   } else {
@@ -19,19 +37,19 @@ const replyUnavailable = async interaction => {
 }
 
 const handleRiskSlash = async (interaction, engine) => {
-  const mod = loadPanel()
-  if (!mod || !engine) {
+  const panel = loadPanel()
+  if (!panel.mod || !engine) {
     await replyUnavailable(interaction)
     return
   }
 
-  await mod.handleRiskSlash(interaction, engine)
+  await panel.mod.handleRiskSlash(interaction, engine)
 }
 
 const handleRiskComponent = async (interaction, engine) => {
-  const mod = loadPanel()
-  if (!mod || !engine) return
-  await mod.handleRiskComponent(interaction, engine)
+  const panel = loadPanel()
+  if (!panel.mod || !engine) return
+  await panel.mod.handleRiskComponent(interaction, engine)
 }
 
 module.exports = {

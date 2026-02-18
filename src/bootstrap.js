@@ -3,8 +3,8 @@ const slashLoader = require("./core/loaders/slash.loader")
 const prefixLoader = require("./core/loaders/prefix.loader")
 const { initRiskEngine } = require("./core/risk/runtime")
 
-module.exports = client => {
-  client.riskEngine = initRiskEngine()
+module.exports = async client => {
+  client.riskEngine = await initRiskEngine()
 
   eventLoader(client)
   slashLoader(client)
