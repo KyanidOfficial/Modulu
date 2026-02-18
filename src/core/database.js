@@ -11,6 +11,44 @@ const pool = mysql.createPool({
 
 let moderationLogsReady = false
 let automodTablesReady = false
+let warningTablesReady = false
+
+const ensureWarningTables = async () => {
+  if (warningTablesReady) return
+
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS warning_users (
+      guild_id VARCHAR(32) NOT NULL,
+      user_id VARCHAR(32) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+      PRIMARY KEY (guild_id, user_id)
+    )
+    `
+  )
+
+  await pool.query(
+    `
+    CREATE TABLE IF NOT EXISTS mod_warnings (
+      id VARCHAR(32) NOT NULL,
+      guild_id VARCHAR(32) NOT NULL,
+      user_id VARCHAR(32) NOT NULL,
+      moderator_id VARCHAR(32) NOT NULL,
+      reason TEXT NOT NULL,
+      source VARCHAR(32) NOT NULL DEFAULT 'manual',
+      active TINYINT(1) NOT NULL DEFAULT 1,
+      created_at BIGINT NOT NULL,
+      revoked_at BIGINT NULL,
+      PRIMARY KEY (id),
+      INDEX idx_warnings_lookup (guild_id, user_id, created_at),
+      INDEX idx_warnings_duplicate (guild_id, user_id, moderator_id, active, created_at)
+    )
+    `
+  )
+
+  warningTablesReady = true
+}
 
 const ensureModerationLogsTable = async () => {
   if (moderationLogsReady) return
@@ -95,33 +133,127 @@ module.exports = {
   },
 
   async addWarning(data) {
+    await ensureWarningTables()
     await pool.query(
-      "INSERT INTO warnings (id, guild_id, user_id, moderator_id, reason, active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      `
+      INSERT INTO mod_warnings (id, guild_id, user_id, moderator_id, reason, source, active, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `,
       [
         data.id,
         data.guildId,
         data.userId,
         data.moderatorId,
         data.reason,
+        data.source || "manual",
         data.active ? 1 : 0,
         data.createdAt
       ]
     )
   },
 
-  async revokeWarning(id) {
+  async revokeWarning(guildId, userId, id) {
+    await ensureWarningTables()
     await pool.query(
-      "UPDATE warnings SET active = 0 WHERE id = ?",
-      [id]
+      "UPDATE mod_warnings SET active = 0, revoked_at = ? WHERE guild_id = ? AND user_id = ? AND id = ?",
+      [Date.now(), guildId, userId, id]
     )
   },
 
   async getWarnings(guildId, userId) {
+    await ensureWarningTables()
+    await this.ensureWarningUser(guildId, userId)
     const [rows] = await pool.query(
-      "SELECT * FROM warnings WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC",
+      "SELECT * FROM mod_warnings WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC",
       [guildId, userId]
     )
     return rows
+  },
+
+  async ensureWarningUser(guildId, userId) {
+    await ensureWarningTables()
+    await pool.query(
+      `
+      INSERT INTO warning_users (guild_id, user_id)
+      VALUES (?, ?)
+      ON DUPLICATE KEY UPDATE updated_at = CURRENT_TIMESTAMP
+      `,
+      [guildId, userId]
+    )
+  },
+
+  async createWarning({ guildId, userId, moderatorId, reason, source = "manual" }) {
+    await ensureWarningTables()
+    await this.ensureWarningUser(guildId, userId)
+
+    const warningId = `${Date.now()}${Math.floor(Math.random() * 1000).toString().padStart(3, "0")}`
+
+    await this.addWarning({
+      id: warningId,
+      guildId,
+      userId,
+      moderatorId,
+      reason,
+      source,
+      active: true,
+      createdAt: Date.now()
+    })
+
+    return warningId
+  },
+
+  async getWarningById(guildId, userId, warningId) {
+    await ensureWarningTables()
+    const [rows] = await pool.query(
+      "SELECT * FROM mod_warnings WHERE guild_id = ? AND user_id = ? AND id = ? LIMIT 1",
+      [guildId, userId, warningId]
+    )
+    return rows[0] || null
+  },
+
+  async clearWarnings(guildId, userId) {
+    await ensureWarningTables()
+    const [result] = await pool.query(
+      "UPDATE mod_warnings SET active = 0, revoked_at = ? WHERE guild_id = ? AND user_id = ? AND active = 1",
+      [Date.now(), guildId, userId]
+    )
+    return result.affectedRows || 0
+  },
+
+  async countWarnings(guildId, userId, activeOnly = false) {
+    await ensureWarningTables()
+    await this.ensureWarningUser(guildId, userId)
+    const [rows] = await pool.query(
+      `
+      SELECT COUNT(*) AS count
+      FROM mod_warnings
+      WHERE guild_id = ?
+        AND user_id = ?
+        ${activeOnly ? "AND active = 1" : ""}
+      `,
+      [guildId, userId]
+    )
+    return rows[0]?.count || 0
+  },
+
+  async hasDuplicateWarning({ guildId, userId, moderatorId, reason, withinMs }) {
+    await ensureWarningTables()
+    const threshold = Date.now() - Math.max(1000, withinMs || 10000)
+    const [rows] = await pool.query(
+      `
+      SELECT id
+      FROM mod_warnings
+      WHERE guild_id = ?
+        AND user_id = ?
+        AND moderator_id = ?
+        AND reason = ?
+        AND active = 1
+        AND created_at >= ?
+      LIMIT 1
+      `,
+      [guildId, userId, moderatorId, reason, threshold]
+    )
+    return rows.length > 0
   },
 
   async addSpamEvent({ guildId, userId, type, metadata }) {
@@ -290,6 +422,24 @@ module.exports = {
       [guildId, userId, triggerType, withinMinutes]
     )
     return rows[0].count || 0
+  },
+
+
+
+  async getRecentAutomodInfractions(guildId, limit = 10) {
+    await ensureAutomodTables()
+    const safeLimit = Math.max(1, Math.min(25, Number(limit) || 10))
+    const [rows] = await pool.query(
+      `
+      SELECT id, guild_id, user_id, trigger_type, reason, metadata, created_at
+      FROM automod_infractions
+      WHERE guild_id = ?
+      ORDER BY created_at DESC
+      LIMIT ?
+      `,
+      [guildId, safeLimit]
+    )
+    return rows
   },
 
   async isAutomodCooldownActive(guildId, userId, triggerType) {
