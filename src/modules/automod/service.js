@@ -26,13 +26,6 @@ const safePreview = content => {
   return escaped.length > 220 ? `${escaped.slice(0, 217)}...` : escaped
 }
 
-const safePreview = value => {
-  const normalized = String(value || "").replace(/\s+/g, " ").trim()
-  if (!normalized) return "[no text content]"
-  const escaped = escapeMarkdownSafe(normalized)
-  return escaped.length > 220 ? `${escaped.slice(0, 217)}...` : escaped
-}
-
 const hasBypass = (member, cfg) => {
   if (!member) return true
   if (member.permissions.has(PermissionsBitField.Flags.Administrator)) return true

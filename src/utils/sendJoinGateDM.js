@@ -1,4 +1,4 @@
-const infoEmbed = require("../../messages/embeds/info.embed")
+const infoEmbed = require("../messages/embeds/info.embed")
 
 module.exports = async (user, reasons) => {
   try {
