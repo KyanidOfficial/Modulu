@@ -11,10 +11,13 @@ const successEmbed = require("../../messages/embeds/joinGate.success.embed")
 const rejectEmbed = require("../../messages/embeds/joinGate.rejected.embed")
 const approveEmbed = require("../../messages/embeds/joinGate.approved.embed")
 const feedbackEmbed = require("../../messages/embeds/feedback.embed")
+const systemEmbed = require("../../messages/embeds/system.embed")
+const COLORS = require("../../utils/colors")
 
 const staffTimeButtons = require("./staffTime.buttons")
 const handleApplications = require("../../modules/applications/handlers")
 const { requireEnabled } = require("../../utils/commandToggle")
+const handleAutomodPanel = require("../../modules/automod/panel.handlers")
 
 const GLOBAL_FEEDBACK_CHANNEL = "1456085711802335353"
 const FEEDBACK_COOLDOWN = 1000 * 60 * 60
@@ -33,10 +36,16 @@ module.exports = async (client, interaction) => {
     if (
       interaction.isButton() ||
       interaction.isStringSelectMenu() ||
+      interaction.isChannelSelectMenu() ||
       interaction.isModalSubmit()
     ) {
       if (interaction.customId?.startsWith("apps:")) {
         await handleApplications(interaction)
+        return
+      }
+
+      if (interaction.customId?.startsWith("automod:")) {
+        await handleAutomodPanel(interaction)
         return
       }
     }
@@ -84,7 +93,11 @@ module.exports = async (client, interaction) => {
         const last = feedbackCooldowns.get(interaction.user.id)
         if (last && Date.now() - last < FEEDBACK_COOLDOWN) {
           await interaction.reply({
-            content: "You already sent feedback. Try again later.",
+            embeds: [systemEmbed({
+              title: "Feedback Cooldown",
+              description: "You already sent feedback. Try again later.",
+              color: COLORS.warning
+            })],
             ephemeral: true
           })
           return
@@ -129,7 +142,11 @@ module.exports = async (client, interaction) => {
         }
 
         await interaction.reply({
-          content: "Feedback sent. Thank you.",
+          embeds: [systemEmbed({
+            title: "Feedback",
+            description: "Feedback sent. Thank you.",
+            color: COLORS.success
+          })],
           ephemeral: true
         })
 
@@ -262,9 +279,22 @@ module.exports = async (client, interaction) => {
     const enabled = requireEnabled(command)
     if (!enabled.ok) {
       if (!interaction.deferred && !interaction.replied) {
-        await interaction.reply({ content: enabled.reason, ephemeral: true }).catch(() => {})
+        await interaction.reply({
+          embeds: [systemEmbed({
+            title: "Command Disabled",
+            description: enabled.reason,
+            color: COLORS.warning
+          })],
+          ephemeral: true
+        }).catch(() => {})
       } else {
-        await interaction.editReply({ content: enabled.reason }).catch(() => {})
+        await interaction.editReply({
+          embeds: [systemEmbed({
+            title: "Command Disabled",
+            description: enabled.reason,
+            color: COLORS.warning
+          })]
+        }).catch(() => {})
       }
       return
     }
