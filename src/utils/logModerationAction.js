@@ -40,7 +40,9 @@ module.exports = async ({
       duration,
       expiresAt,
       caseId,
-      color: color || COLORS.warning
+      color: color || COLORS.warning,
+      warningCount: metadata?.warningCount,
+      metadata
     })
   )
 
