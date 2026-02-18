@@ -73,16 +73,16 @@ const createDashboardEmbed = ({ cfg, recentCount = 0 }) => {
 
 const createDashboardComponents = () => [
   new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("automod:toggle").setLabel("Toggle Rule").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("automod:configure").setLabel("Configure Rule").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId("automod:setlog").setLabel("Set Log Channel").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("automod:recent").setLabel("Recent Triggers").setStyle(ButtonStyle.Success)
+    new ButtonBuilder().setCustomId("automod:dashboard:toggle").setLabel("Toggle Rule").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("automod:dashboard:configure").setLabel("Configure Rule").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("automod:dashboard:setlog").setLabel("Set Log Channel").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("automod:dashboard:recent").setLabel("Recent Triggers").setStyle(ButtonStyle.Success)
   ),
   new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("automod:words:manage").setLabel("Manage Banned Words").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("automod:preset:apply").setLabel("Apply Preset").setStyle(ButtonStyle.Primary),
-    new ButtonBuilder().setCustomId("automod:links:manage").setLabel("Link Presets").setStyle(ButtonStyle.Secondary),
-    new ButtonBuilder().setCustomId("automod:viewcontent:0").setLabel("View Banned Content").setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId("automod:dashboard:words:manage").setLabel("Manage Banned Words").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("automod:dashboard:preset:open").setLabel("Apply Preset").setStyle(ButtonStyle.Primary),
+    new ButtonBuilder().setCustomId("automod:dashboard:links:open").setLabel("Link Presets").setStyle(ButtonStyle.Secondary),
+    new ButtonBuilder().setCustomId("automod:content:view:0").setLabel("View Banned Content").setStyle(ButtonStyle.Secondary)
   )
 ]
 
@@ -98,14 +98,14 @@ const createRuleSelect = (customId, placeholder) =>
 
 const createBackComponents = () => [
   new ActionRowBuilder().addComponents(
-    new ButtonBuilder().setCustomId("automod:home").setLabel("Back").setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId("automod:dashboard:home").setLabel("Back").setStyle(ButtonStyle.Secondary)
   )
 ]
 
 const createLogChannelSelect = () =>
   new ActionRowBuilder().addComponents(
     new ChannelSelectMenuBuilder()
-      .setCustomId("automod:setlog:select")
+      .setCustomId("automod:dashboard:setlog:select")
       .setPlaceholder("Select log channel")
       .setChannelTypes(ChannelType.GuildText)
   )
@@ -113,7 +113,7 @@ const createLogChannelSelect = () =>
 const createPresetSelect = () =>
   new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
-      .setCustomId("automod:preset:select")
+      .setCustomId("automod:preset:select:menu")
       .setPlaceholder("Select banned word preset")
       .addOptions(
         { label: "Racial slurs", value: "racial_slurs" },
@@ -126,7 +126,7 @@ const createPresetSelect = () =>
 const createLinkModeSelect = current =>
   new ActionRowBuilder().addComponents(
     new StringSelectMenuBuilder()
-      .setCustomId("automod:links:mode:select")
+      .setCustomId("automod:links:mode:select:menu")
       .setPlaceholder(`Current: ${linkModeLabelMap[current] || current}`)
       .addOptions(
         { label: "Block all links", value: "block_all_links" },
@@ -185,16 +185,16 @@ const createBannedContentEmbed = ({ cfg, page = 0, pageSize = 25 }) => {
 const createBannedContentPagination = ({ page, totalPages }) => [
   new ActionRowBuilder().addComponents(
     new ButtonBuilder()
-      .setCustomId(`automod:viewcontent:${Math.max(0, page - 1)}`)
+      .setCustomId(`automod:content:prev:${page}`)
       .setLabel("Previous")
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page <= 0),
     new ButtonBuilder()
-      .setCustomId(`automod:viewcontent:${Math.min(totalPages - 1, page + 1)}`)
+      .setCustomId(`automod:content:next:${page}`)
       .setLabel("Next")
       .setStyle(ButtonStyle.Secondary)
       .setDisabled(page >= totalPages - 1),
-    new ButtonBuilder().setCustomId("automod:home").setLabel("Back").setStyle(ButtonStyle.Secondary)
+    new ButtonBuilder().setCustomId("automod:dashboard:home").setLabel("Back").setStyle(ButtonStyle.Secondary)
   )
 ]
 

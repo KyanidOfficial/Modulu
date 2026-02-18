@@ -98,16 +98,6 @@ const detectLinks = (content, cfg) => {
     return null
   }
 
-  if (!cfg.rules.links.allowDiscordInvites && /(discord\.gg|discord\.com\/invite)/i.test(lowered)) {
-    return {
-      type: "links",
-      ruleName: "Link Filter",
-      reason: "Discord invite links are blocked",
-      action: cfg.rules.links.action,
-      timeoutMs: cfg.rules.links.timeoutMs
-    }
-  }
-
   for (const url of urls) {
     const host = (() => {
       try {
@@ -199,13 +189,8 @@ const detectMessageSpam = (message, cfg) => {
       timeoutMs: rule.timeoutMs
     }
   }
-}
 
-const resolveLogChannel = (guild, cfg) => {
-  const channelId = cfg.logChannelId || null
-  if (!channelId) return null
-  const channel = guild.channels.cache.get(channelId)
-  return channel && channel.isTextBased() ? channel : null
+  return null
 }
 
 const detectCapsSpam = (content, cfg) => {

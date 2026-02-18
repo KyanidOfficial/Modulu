@@ -143,32 +143,32 @@ module.exports = async interaction => {
   if (interaction.isButton() && interaction.customId.startsWith("automod:")) {
     const cfg = await store.getConfig(interaction.guild.id)
 
-    if (interaction.customId === "automod:home") {
+    if (interaction.customId === "automod:dashboard:home") {
       return renderDashboard(interaction)
     }
 
-    if (interaction.customId === "automod:toggle") {
+    if (interaction.customId === "automod:dashboard:toggle") {
       return interaction.update({
         embeds: [systemEmbed({ title: "Toggle Rule", description: "Select a rule to toggle.", color: COLORS.info })],
-        components: [createRuleSelect("automod:toggle:select", "Choose a rule"), ...createBackComponents()]
+        components: [createRuleSelect("automod:dashboard:toggle:select", "Choose a rule"), ...createBackComponents()]
       })
     }
 
-    if (interaction.customId === "automod:configure") {
+    if (interaction.customId === "automod:dashboard:configure") {
       return interaction.update({
         embeds: [systemEmbed({ title: "Configure Rule", description: "Select a rule to configure.", color: COLORS.info })],
-        components: [createRuleSelect("automod:configure:select", "Choose a rule"), ...createBackComponents()]
+        components: [createRuleSelect("automod:dashboard:configure:select", "Choose a rule"), ...createBackComponents()]
       })
     }
 
-    if (interaction.customId === "automod:setlog") {
+    if (interaction.customId === "automod:dashboard:setlog") {
       return interaction.update({
         embeds: [systemEmbed({ title: "Set Log Channel", description: "Select the channel for AutoMod logs.", color: COLORS.info })],
         components: [createLogChannelSelect(), ...createBackComponents()]
       })
     }
 
-    if (interaction.customId === "automod:recent") {
+    if (interaction.customId === "automod:dashboard:recent") {
       const rows = await store.getRecentInfractions(interaction.guild.id, 10)
       return interaction.update({
         embeds: [createRecentEmbed(rows)],
@@ -176,38 +176,38 @@ module.exports = async interaction => {
       })
     }
 
-    if (interaction.customId === "automod:words:manage") {
+    if (interaction.customId === "automod:dashboard:words:manage") {
       const modal = buildWordsModal(interaction.message.id)
       return interaction.showModal(modal)
     }
 
-    if (interaction.customId === "automod:preset:apply") {
+    if (interaction.customId === "automod:dashboard:preset:open") {
       return interaction.update({
         embeds: [systemEmbed({ title: "Apply Preset", description: "Select a banned word preset to merge.", color: COLORS.info })],
         components: [createPresetSelect(), ...createBackComponents()]
       })
     }
 
-    if (interaction.customId === "automod:links:manage") {
+    if (interaction.customId === "automod:dashboard:links:open") {
       return interaction.update({
         embeds: [systemEmbed({ title: "Link Filter Presets", description: "Choose mode or manage whitelist domains.", color: COLORS.info })],
         components: [
           createLinkModeSelect(cfg.rules.links.mode),
           new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId("automod:links:whitelist").setLabel("Manage Whitelist").setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId("automod:links:viewwhitelist").setLabel("View Whitelist").setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId("automod:home").setLabel("Back").setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId("automod:links:whitelist:open").setLabel("Manage Whitelist").setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId("automod:links:whitelist:view").setLabel("View Whitelist").setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId("automod:dashboard:home").setLabel("Back").setStyle(ButtonStyle.Secondary)
           )
         ]
       })
     }
 
-    if (interaction.customId === "automod:links:whitelist") {
+    if (interaction.customId === "automod:links:whitelist:open") {
       const modal = buildWhitelistModal(interaction.message.id)
       return interaction.showModal(modal)
     }
 
-    if (interaction.customId === "automod:links:viewwhitelist") {
+    if (interaction.customId === "automod:links:whitelist:view") {
       const domains = cfg.rules.links.whitelistedDomains
       return interaction.update({
         embeds: [systemEmbed({
@@ -217,24 +217,36 @@ module.exports = async interaction => {
         })],
         components: [
           new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId("automod:links:manage").setLabel("Back to Link Presets").setStyle(ButtonStyle.Secondary),
-            new ButtonBuilder().setCustomId("automod:home").setLabel("Dashboard").setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId("automod:dashboard:links:open").setLabel("Back to Link Presets").setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId("automod:dashboard:home").setLabel("Dashboard").setStyle(ButtonStyle.Secondary)
           )
         ]
       })
     }
 
-    if (interaction.customId.startsWith("automod:viewcontent:")) {
-      const page = Number(interaction.customId.split(":")[2] || "0")
+    if (interaction.customId.startsWith("automod:content:view:")) {
+      const page = Number(interaction.customId.split(":")[3] || "0")
       const view = createBannedContentEmbed({ cfg, page })
       return interaction.update({
         embeds: [view.embed],
         components: createBannedContentPagination(view)
       })
     }
+
+    if (interaction.customId.startsWith("automod:content:prev:")) {
+      const current = Number(interaction.customId.split(":")[3] || "0")
+      const view = createBannedContentEmbed({ cfg, page: Math.max(0, current - 1) })
+      return interaction.update({ embeds: [view.embed], components: createBannedContentPagination(view) })
+    }
+
+    if (interaction.customId.startsWith("automod:content:next:")) {
+      const current = Number(interaction.customId.split(":")[3] || "0")
+      const view = createBannedContentEmbed({ cfg, page: current + 1 })
+      return interaction.update({ embeds: [view.embed], components: createBannedContentPagination(view) })
+    }
   }
 
-  if (interaction.isStringSelectMenu() && interaction.customId === "automod:toggle:select") {
+  if (interaction.isStringSelectMenu() && interaction.customId === "automod:dashboard:toggle:select") {
     const cfg = await store.getConfig(interaction.guild.id)
     const ruleKey = interaction.values[0]
     cfg.rules[ruleKey].enabled = !cfg.rules[ruleKey].enabled
@@ -242,14 +254,14 @@ module.exports = async interaction => {
     return renderDashboard(interaction)
   }
 
-  if (interaction.isStringSelectMenu() && interaction.customId === "automod:configure:select") {
+  if (interaction.isStringSelectMenu() && interaction.customId === "automod:dashboard:configure:select") {
     const cfg = await store.getConfig(interaction.guild.id)
     const ruleKey = interaction.values[0]
     const modal = buildRuleConfigModal(ruleKey, cfg, interaction.message.id)
     return interaction.showModal(modal)
   }
 
-  if (interaction.isStringSelectMenu() && interaction.customId === "automod:preset:select") {
+  if (interaction.isStringSelectMenu() && interaction.customId === "automod:preset:select:menu") {
     const cfg = await store.getConfig(interaction.guild.id)
     const presetKey = interaction.values[0]
     const presetWords = BANNED_WORD_PRESETS[presetKey] || []
@@ -272,7 +284,7 @@ module.exports = async interaction => {
     })
   }
 
-  if (interaction.isStringSelectMenu() && interaction.customId === "automod:links:mode:select") {
+  if (interaction.isStringSelectMenu() && interaction.customId === "automod:links:mode:select:menu") {
     const cfg = await store.getConfig(interaction.guild.id)
     const mode = interaction.values[0]
     cfg.rules.links.mode = mode
@@ -287,15 +299,15 @@ module.exports = async interaction => {
       components: [
         createLinkModeSelect(cfg.rules.links.mode),
         new ActionRowBuilder().addComponents(
-          new ButtonBuilder().setCustomId("automod:links:whitelist").setLabel("Manage Whitelist").setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId("automod:links:viewwhitelist").setLabel("View Whitelist").setStyle(ButtonStyle.Secondary),
-          new ButtonBuilder().setCustomId("automod:home").setLabel("Back").setStyle(ButtonStyle.Secondary)
+          new ButtonBuilder().setCustomId("automod:links:whitelist:open").setLabel("Manage Whitelist").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId("automod:links:whitelist:view").setLabel("View Whitelist").setStyle(ButtonStyle.Secondary),
+          new ButtonBuilder().setCustomId("automod:dashboard:home").setLabel("Back").setStyle(ButtonStyle.Secondary)
         )
       ]
     })
   }
 
-  if (interaction.isChannelSelectMenu() && interaction.customId === "automod:setlog:select") {
+  if (interaction.isChannelSelectMenu() && interaction.customId === "automod:dashboard:setlog:select") {
     const cfg = await store.getConfig(interaction.guild.id)
     cfg.logChannelId = interaction.values[0] || null
     await store.saveConfig(interaction.guild.id, cfg)
