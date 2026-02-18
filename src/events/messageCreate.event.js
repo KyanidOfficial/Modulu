@@ -1,7 +1,6 @@
 const prefixHandler = require("../core/handlers/prefix.handler")
 const harmfulLinks = require("./messages/harmfulLinks")
 const sbDebug = require("./messages/sbDebug")
-// const spamProtection = require("./messages/spamProtection")
 const giveawayTrigger = require("./messages/giveawayTrigger")
 const handleApplicationDm = require("../modules/applications/dm.handler")
 const automod = require("../modules/automod/service")
@@ -14,7 +13,6 @@ module.exports = async (client, message) => {
 
   const isDM = isDmBasedChannel(message.channel)
 
-  // DM routing must happen before guild-only middleware.
   if (isDM) {
     const consumedByApplicationFlow = await handleApplicationDm(message)
     if (consumedByApplicationFlow) return
@@ -26,13 +24,17 @@ module.exports = async (client, message) => {
   try {
     const automodResult = await automod.handleMessage(message)
     if (automodResult?.blocked) return
-  } catch (err) {
-    console.error("[MESSAGE_CREATE] automod execution failed", err)
+  } catch {
+    // keep event flow stable on automod failure
   }
 
-  // await spamProtection(message)
+  try {
+    await harmfulLinks(message)
+  } catch {
+    // keep event flow stable on harmful-links failure
+  }
+
   await sbDebug(message)
-  await harmfulLinks(message)
   await giveawayTrigger(message)
   await prefixHandler(client, message)
 }

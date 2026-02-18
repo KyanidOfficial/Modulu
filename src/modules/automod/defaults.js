@@ -29,13 +29,17 @@ module.exports = {
       enabled: true,
       action: "delete_timeout",
       timeoutMs: 10 * 60 * 1000,
-      mode: "block_invites_only",
+      allowDiscordInvites: false,
+      blockRedirectors: true,
       scoreInvite: 10,
-      scoreShortener: 5,
       scoreBlockedDomain: 8,
+      scoreRedirector: 6,
+      scoreScamKeyword: 8,
       blockedDomains: [],
       whitelistedDomains: [],
-      shortenerDomains: SHORTENER_DOMAINS
+      shortenerDomains: SHORTENER_DOMAINS,
+      redirectorDomains: ["grabify.link", "iplogger.org", "2no.co", "adf.ly"],
+      knownScamKeywords: ["free nitro", "steam gift", "airdrop", "wallet connect"]
     },
     mentionSpam: {
       enabled: true,
@@ -48,15 +52,16 @@ module.exports = {
       enabled: true,
       action: "delete_timeout",
       timeoutMs: 10 * 60 * 1000,
-      maxMessages: 12,
+      maxMessages: 10,
       windowMs: 15000,
-      maxDuplicates: 5,
+      maxDuplicates: 4,
       duplicateWindowMs: 15000,
       similarityThreshold: 0.7,
       minMessagesForEvaluation: 3,
       minMessageLength: 5,
       scoreRate: 5,
-      scoreSimilarity: 5
+      scoreSimilarity: 5,
+      scoreDuplicate: 2
     },
     capsSpam: {
       enabled: true,
