@@ -6,3 +6,4 @@ export * from './RiskFeatureVector';
 export * from './RiskWeights';
 export * from './AltDetection';
 export * from './DashboardAggregator';
+export * from './panel/RiskPanelController';

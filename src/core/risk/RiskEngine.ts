@@ -127,6 +127,23 @@ export class RiskEngine {
     return likelihood.score;
   }
 
+
+  public async getRiskOverview(guildId: string) {
+    return this.dashboard.getRiskOverview(guildId);
+  }
+
+  public async getAltAlerts(guildId: string) {
+    return this.dashboard.getAltAlerts(guildId);
+  }
+
+  public async getHeatmapData(guildId: string) {
+    return this.dashboard.getRiskHeatmap(guildId);
+  }
+
+  public async getUserTimeline(guildId: string, userId: string) {
+    return this.dashboard.getUserRiskTimeline(guildId, userId);
+  }
+
   public getDashboardAggregator(): DashboardAggregator {
     return this.dashboard;
   }
