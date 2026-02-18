@@ -10,7 +10,7 @@ const warningStore = require("../../../modules/warnings/store")
 module.exports = {
   COMMAND_ENABLED,
   data: new SlashCommandBuilder()
-    .setName("clearallwarns")
+    .setName("revokeallwarns")
     .setDescription("Clear all active warnings for a user")
     .addUserOption(o =>
       o.setName("user").setDescription("Target user").setRequired(true)
