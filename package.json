@@ -6,9 +6,15 @@
   "scripts": {
     "start": "node src/index.js",
     "postinstall": "node scripts/fix-magic-bytes.js",
+<<<<<<< codex/design-behavioral-risk-intelligence-engine-cfkvf3
     "typecheck": "node scripts/run-tsc.js --noEmit",
     "test:risk": "npm run build:risk && node --test dist/__tests__/riskEngine.test.js",
     "build:risk": "node scripts/run-tsc.js -p tsconfig.json",
+=======
+    "typecheck": "tsc --noEmit",
+    "test:risk": "tsc -p tsconfig.json && node --test dist/__tests__/riskEngine.test.js",
+    "build:risk": "tsc -p tsconfig.json",
+>>>>>>> main
     "test:db": "node --test src/core/database/__tests__/mysqlPool.test.js",
     "test:reliability": "npm run test:db && npm run test:risk"
   },
