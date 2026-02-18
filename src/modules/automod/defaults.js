@@ -8,6 +8,7 @@ module.exports = {
     mentions: true,
     rateLimit: true,
     attachments: true,
+    caps: true,
     aiModeration: true
   },
   blacklistWords: ["discord.gg/free-nitro", "free nitro", "steam gift"],
@@ -19,6 +20,10 @@ module.exports = {
     maxRepeatedMessages: 4,
     maxMentions: 5,
     duplicateSimilarity: 0.9
+  },
+  caps: {
+    minLength: 12,
+    threshold: 0.75
   },
   links: {
     blockRedirectors: true,
@@ -37,6 +42,8 @@ module.exports = {
     malicious_link: ["warn", "mute", "ban"],
     invite: ["warn", "mute", "kick"],
     spam: ["warn", "mute", "kick"],
+    rate_limit: ["warn", "mute", "kick"],
+    caps: ["warn", "mute", "kick"],
     explicit_attachment: ["warn", "mute", "ban"]
   },
   timeouts: {
