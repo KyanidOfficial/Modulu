@@ -5,11 +5,19 @@
   "type": "commonjs",
   "scripts": {
     "start": "node src/index.js",
-    "postinstall": "node scripts/fix-magic-bytes.js"
+    "postinstall": "node scripts/fix-magic-bytes.js",
+    "typecheck": "node scripts/run-tsc.js --noEmit -p tsconfig.risk.json",
+    "test:risk": "npm run build:risk && node --test dist/risk/__tests__/riskEngine.test.js",
+    "build:risk": "node scripts/run-tsc.js -p tsconfig.risk.json",
+    "test:db": "node --test src/core/database/__tests__/mysqlPool.test.js",
+    "test:reliability": "npm run test:db && npm run test:risk"
   },
   "dependencies": {
     "discord.js": "^14.25.1",
     "dotenv": "^16.4.5",
     "mysql2": "^3.16.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.3"
   }
 }

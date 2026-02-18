@@ -1,13 +1,4 @@
-const mysql = require("mysql2/promise")
-
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 5
-})
+const { executeQuery } = require("./mysql")
 
 const parseJson = raw => {
   if (!raw) return null
@@ -22,7 +13,7 @@ const parseJson = raw => {
 
 module.exports = {
   async getAllConfigs(guildId) {
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       "SELECT type, config_json FROM application_configs WHERE guild_id = ?",
       [guildId]
     )
@@ -36,7 +27,7 @@ module.exports = {
   },
 
   async getConfig(guildId, type) {
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       "SELECT config_json FROM application_configs WHERE guild_id = ? AND type = ?",
       [guildId, type]
     )
@@ -46,7 +37,7 @@ module.exports = {
   },
 
   async saveConfig(guildId, type, config) {
-    await pool.query(
+    await executeQuery(
       `
       INSERT INTO application_configs (guild_id, type, config_json)
       VALUES (?, ?, ?)
@@ -57,7 +48,7 @@ module.exports = {
   },
 
   async deleteConfig(guildId, type) {
-    const [result] = await pool.query(
+    const [result] = await executeQuery(
       "DELETE FROM application_configs WHERE guild_id = ? AND type = ?",
       [guildId, type]
     )
@@ -66,7 +57,7 @@ module.exports = {
   },
 
   async createSubmission({ guildId, type, userId, answers, status = "pending" }) {
-    const [result] = await pool.query(
+    const [result] = await executeQuery(
       `
       INSERT INTO application_submissions
       (guild_id, type, user_id, answers_json, status)
@@ -79,7 +70,7 @@ module.exports = {
   },
 
   async deleteSubmission(guildId, submissionId) {
-    const [result] = await pool.query(
+    const [result] = await executeQuery(
       "DELETE FROM application_submissions WHERE guild_id = ? AND id = ?",
       [guildId, submissionId]
     )
@@ -88,7 +79,7 @@ module.exports = {
   },
 
   async deleteSubmissionsByType(guildId, type) {
-    const [result] = await pool.query(
+    const [result] = await executeQuery(
       "DELETE FROM application_submissions WHERE guild_id = ? AND type = ?",
       [guildId, type]
     )
@@ -97,7 +88,7 @@ module.exports = {
   },
 
   async listSubmissions(guildId) {
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       `
       SELECT id, user_id, type, status, answers_json
       FROM application_submissions
@@ -120,7 +111,7 @@ module.exports = {
   },
 
   async getSubmission(guildId, submissionId) {
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       `
       SELECT id, user_id, type, status, answers_json
       FROM application_submissions
@@ -142,7 +133,7 @@ module.exports = {
   },
 
   async saveSubmission(guildId, submissionId, { status, payload }) {
-    const [result] = await pool.query(
+    const [result] = await executeQuery(
       `
       UPDATE application_submissions
       SET status = ?, answers_json = ?

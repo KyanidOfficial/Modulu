@@ -1,13 +1,4 @@
-const mysql = require("mysql2/promise")
-
-const pool = mysql.createPool({
-  host: process.env.DB_HOST,
-  user: process.env.DB_USER,
-  password: process.env.DB_PASS,
-  database: process.env.DB_NAME,
-  waitForConnections: true,
-  connectionLimit: 5
-})
+const { executeQuery } = require("./database/mysql")
 
 let moderationLogsReady = false
 let automodTablesReady = false
@@ -16,7 +7,7 @@ let warningTablesReady = false
 const ensureWarningTables = async () => {
   if (warningTablesReady) return
 
-  await pool.query(
+  await executeQuery(
     `
     CREATE TABLE IF NOT EXISTS warning_users (
       guild_id VARCHAR(32) NOT NULL,
@@ -28,7 +19,7 @@ const ensureWarningTables = async () => {
     `
   )
 
-  await pool.query(
+  await executeQuery(
     `
     CREATE TABLE IF NOT EXISTS mod_warnings (
       id VARCHAR(32) NOT NULL,
@@ -53,7 +44,7 @@ const ensureWarningTables = async () => {
 const ensureModerationLogsTable = async () => {
   if (moderationLogsReady) return
 
-  await pool.query(
+  await executeQuery(
     `
     CREATE TABLE IF NOT EXISTS moderation_logs (
       id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -74,7 +65,7 @@ const ensureModerationLogsTable = async () => {
 const ensureAutomodTables = async () => {
   if (automodTablesReady) return
 
-  await pool.query(
+  await executeQuery(
     `
     CREATE TABLE IF NOT EXISTS automod_configs (
       guild_id VARCHAR(32) PRIMARY KEY,
@@ -84,7 +75,7 @@ const ensureAutomodTables = async () => {
     `
   )
 
-  await pool.query(
+  await executeQuery(
     `
     CREATE TABLE IF NOT EXISTS automod_infractions (
       id BIGINT AUTO_INCREMENT PRIMARY KEY,
@@ -99,7 +90,7 @@ const ensureAutomodTables = async () => {
     `
   )
 
-  await pool.query(
+  await executeQuery(
     `
     CREATE TABLE IF NOT EXISTS automod_cooldowns (
       guild_id VARCHAR(32) NOT NULL,
@@ -116,7 +107,7 @@ const ensureAutomodTables = async () => {
 
 module.exports = {
   async get(guildId) {
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       "SELECT setup_json FROM servers WHERE guild_id = ?",
       [guildId]
     )
@@ -126,7 +117,7 @@ module.exports = {
   },
 
   async save(guildId, data) {
-    await pool.query(
+    await executeQuery(
       "INSERT INTO servers (guild_id, setup_json) VALUES (?, ?) ON DUPLICATE KEY UPDATE setup_json = VALUES(setup_json)",
       [guildId, JSON.stringify(data)]
     )
@@ -134,7 +125,7 @@ module.exports = {
 
   async addWarning(data) {
     await ensureWarningTables()
-    await pool.query(
+    await executeQuery(
       `
       INSERT INTO mod_warnings (id, guild_id, user_id, moderator_id, reason, source, active, created_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
@@ -154,7 +145,7 @@ module.exports = {
 
   async revokeWarning(guildId, userId, id) {
     await ensureWarningTables()
-    await pool.query(
+    await executeQuery(
       "UPDATE mod_warnings SET active = 0, revoked_at = ? WHERE guild_id = ? AND user_id = ? AND id = ?",
       [Date.now(), guildId, userId, id]
     )
@@ -163,7 +154,7 @@ module.exports = {
   async getWarnings(guildId, userId) {
     await ensureWarningTables()
     await this.ensureWarningUser(guildId, userId)
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       "SELECT * FROM mod_warnings WHERE guild_id = ? AND user_id = ? ORDER BY created_at DESC",
       [guildId, userId]
     )
@@ -172,7 +163,7 @@ module.exports = {
 
   async ensureWarningUser(guildId, userId) {
     await ensureWarningTables()
-    await pool.query(
+    await executeQuery(
       `
       INSERT INTO warning_users (guild_id, user_id)
       VALUES (?, ?)
@@ -204,7 +195,7 @@ module.exports = {
 
   async getWarningById(guildId, userId, warningId) {
     await ensureWarningTables()
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       "SELECT * FROM mod_warnings WHERE guild_id = ? AND user_id = ? AND id = ? LIMIT 1",
       [guildId, userId, warningId]
     )
@@ -213,7 +204,7 @@ module.exports = {
 
   async clearWarnings(guildId, userId) {
     await ensureWarningTables()
-    const [result] = await pool.query(
+    const [result] = await executeQuery(
       "UPDATE mod_warnings SET active = 0, revoked_at = ? WHERE guild_id = ? AND user_id = ? AND active = 1",
       [Date.now(), guildId, userId]
     )
@@ -223,7 +214,7 @@ module.exports = {
   async countWarnings(guildId, userId, activeOnly = false) {
     await ensureWarningTables()
     await this.ensureWarningUser(guildId, userId)
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       `
       SELECT COUNT(*) AS count
       FROM mod_warnings
@@ -239,7 +230,7 @@ module.exports = {
   async hasDuplicateWarning({ guildId, userId, moderatorId, reason, withinMs }) {
     await ensureWarningTables()
     const threshold = Date.now() - Math.max(1000, withinMs || 10000)
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       `
       SELECT id
       FROM mod_warnings
@@ -257,14 +248,14 @@ module.exports = {
   },
 
   async addSpamEvent({ guildId, userId, type, metadata }) {
-    await pool.query(
+    await executeQuery(
       "INSERT INTO spam_events (guild_id, user_id, type, metadata, created_at) VALUES (?, ?, ?, ?, NOW())",
       [guildId, userId, type, JSON.stringify(metadata || {})]
     )
   },
 
   async cleanupSpamEvents(minutes = 30) {
-    await pool.query(
+    await executeQuery(
       `
       DELETE FROM spam_events
       WHERE created_at < NOW() - INTERVAL ? MINUTE
@@ -274,7 +265,7 @@ module.exports = {
   },
 
   async incrementViolation({ guildId, userId, type }) {
-    await pool.query(
+    await executeQuery(
       `
       INSERT INTO user_violations (guild_id, user_id, type, count, last_trigger)
       VALUES (?, ?, ?, 1, NOW())
@@ -287,7 +278,7 @@ module.exports = {
   },
 
   async getViolation(guildId, userId, type) {
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       "SELECT * FROM user_violations WHERE guild_id = ? AND user_id = ? AND type = ?",
       [guildId, userId, type]
     )
@@ -295,21 +286,21 @@ module.exports = {
   },
 
   async resetViolation(guildId, userId, type) {
-    await pool.query(
+    await executeQuery(
       "DELETE FROM user_violations WHERE guild_id = ? AND user_id = ? AND type = ?",
       [guildId, userId, type]
     )
   },
 
   async addJoin(guildId) {
-    await pool.query(
+    await executeQuery(
       "INSERT INTO join_velocity (guild_id, joined_at) VALUES (?, NOW())",
       [guildId]
     )
   },
 
   async countRecentJoins(guildId, seconds) {
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       `
       SELECT COUNT(*) AS count
       FROM join_velocity
@@ -322,7 +313,7 @@ module.exports = {
   },
 
   async setRaidState({ guildId, active, joinCount, durationSeconds }) {
-    await pool.query(
+    await executeQuery(
       `
       INSERT INTO raid_state (guild_id, active, join_count, started_at, ends_at)
       VALUES (?, ?, ?, NOW(), DATE_ADD(NOW(), INTERVAL ? SECOND))
@@ -337,7 +328,7 @@ module.exports = {
   },
 
   async getRaidState(guildId) {
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       "SELECT * FROM raid_state WHERE guild_id = ?",
       [guildId]
     )
@@ -345,7 +336,7 @@ module.exports = {
   },
 
   async cleanupViolations(minutes = 30) {
-    await pool.query(
+    await executeQuery(
       `
       DELETE FROM user_violations
       WHERE last_trigger < NOW() - INTERVAL ? MINUTE
@@ -356,7 +347,7 @@ module.exports = {
 
   async addModerationLog({ guildId, action, userId, moderatorId, reason, metadata }) {
     await ensureModerationLogsTable()
-    const [result] = await pool.query(
+    const [result] = await executeQuery(
       `
       INSERT INTO moderation_logs
         (guild_id, action, user_id, moderator_id, reason, metadata)
@@ -376,7 +367,7 @@ module.exports = {
 
   async getAutomodConfig(guildId) {
     await ensureAutomodTables()
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       "SELECT config_json FROM automod_configs WHERE guild_id = ?",
       [guildId]
     )
@@ -386,7 +377,7 @@ module.exports = {
 
   async saveAutomodConfig(guildId, config) {
     await ensureAutomodTables()
-    await pool.query(
+    await executeQuery(
       `
       INSERT INTO automod_configs (guild_id, config_json)
       VALUES (?, ?)
@@ -398,7 +389,7 @@ module.exports = {
 
   async addAutomodInfraction({ guildId, userId, triggerType, reason, metadata }) {
     await ensureAutomodTables()
-    await pool.query(
+    await executeQuery(
       `
       INSERT INTO automod_infractions
         (guild_id, user_id, trigger_type, reason, metadata)
@@ -410,7 +401,7 @@ module.exports = {
 
   async countAutomodInfractions(guildId, userId, triggerType, withinMinutes = 1440) {
     await ensureAutomodTables()
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       `
       SELECT COUNT(*) AS count
       FROM automod_infractions
@@ -429,7 +420,7 @@ module.exports = {
   async getRecentAutomodInfractions(guildId, limit = 10) {
     await ensureAutomodTables()
     const safeLimit = Math.max(1, Math.min(25, Number(limit) || 10))
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       `
       SELECT id, guild_id, user_id, trigger_type, reason, metadata, created_at
       FROM automod_infractions
@@ -444,7 +435,7 @@ module.exports = {
 
   async isAutomodCooldownActive(guildId, userId, triggerType) {
     await ensureAutomodTables()
-    const [rows] = await pool.query(
+    const [rows] = await executeQuery(
       `
       SELECT 1 AS active
       FROM automod_cooldowns
@@ -461,7 +452,7 @@ module.exports = {
   async setAutomodCooldown(guildId, userId, triggerType, cooldownMs) {
     await ensureAutomodTables()
     const seconds = Math.max(1, Math.floor(cooldownMs / 1000))
-    await pool.query(
+    await executeQuery(
       `
       INSERT INTO automod_cooldowns (guild_id, user_id, trigger_type, expires_at)
       VALUES (?, ?, ?, DATE_ADD(NOW(), INTERVAL ? SECOND))
