@@ -7,7 +7,7 @@ const { updateDirectedRisk } = require("../models/directedRiskMatrix")
 const { updateGraphFromMessage, detectClusterAsync } = require("../engines/graphIntelligence.engine")
 const { triggerVictimProtection } = require("./victimProtection.service")
 const { appendEvidence, exportEvidence } = require("./evidenceIntegrity.service")
-const { interventionLevel, executeEnforcement } = require("./enforcementOrchestrator.service")
+const { interventionLevel, handleAssessment } = require("./enforcementOrchestrator.service")
 const { clamp01 } = require("../models/userRiskState")
 const { startModeratorApi } = require("./moderatorApi.service")
 const { debugLog } = require("./debugLogger.service")
@@ -85,29 +85,40 @@ class SimService {
     })
 
 
-    await executeEnforcement({
-      guildId,
-      sourceUserId: userId,
-      targetId,
-      directedSeverity,
-      rawLevel,
-      effectiveLevel: level,
-      intent,
-      globalRisk,
-      deps: {
-        onVictimProtection: targetId && directedSeverity >= this.config.thresholds.intervention.level2 && this.config.featureFlags.victimPreContact
-          ? () => triggerVictimProtection({ guildId, victimUser, store: this.store, sourceId: userId, targetId })
-          : null,
-        onModeratorAlert: async context => {
-          debugLog("enforcement.moderatorAlert", context)
-          console.log("SIM MODERATOR ALERT", context)
+    try {
+      await handleAssessment({
+        context: {
+          guildId,
+          userId,
+          targetId,
+          directedSeverity,
+          intentConfidence: intent
         },
-        onFormalModeration: async context => {
-          debugLog("enforcement.formalAction", context)
-          console.log("SIM FORMAL MODERATION", context)
+        level: rawLevel,
+        effectiveLevel: level,
+        thresholds: this.config.thresholds,
+        maxEnforcementLevel: this.config.maxEnforcementLevel,
+        actions: {
+          triggerVictimProtection: async ({ guildId: gId, sourceUserId, targetUserId, severity, intentConfidence }) => {
+            if (!this.config.featureFlags.victimPreContact) return
+            await triggerVictimProtection({
+              guildId: gId,
+              victimUser,
+              store: this.store,
+              sourceId: sourceUserId,
+              targetId: targetUserId,
+              severity,
+              intentConfidence,
+              logChannelId: this.config.logChannelId
+            })
+          },
+          notifyModerators: payload => this.notifyModerators(payload),
+          formalModerationAction: payload => this.formalModerationAction(payload)
         }
-      }
-    })
+      })
+    } catch (error) {
+      console.error("[SIM] enforcement failed", error)
+    }
 
     if (level >= 3 && targetId && channelId) {
       appendEvidence({
@@ -222,6 +233,30 @@ class SimService {
 
   getEvidence(sessionId) {
     return exportEvidence(this.store, sessionId)
+  }
+
+
+  async notifyModerators({ guildId, sourceUserId, targetUserId, directedSeverity, intentConfidence }) {
+    const maxIntent = Math.max(...Object.values(intentConfidence || {}).map(v => v.confidence || 0), 0)
+    debugLog("moderator.alert", {
+      guildId,
+      sourceUserId,
+      targetUserId,
+      directedSeverity,
+      maxIntent
+    })
+  }
+
+  async formalModerationAction({ guildId, sourceUserId, targetUserId, directedSeverity, intentConfidence }) {
+    const maxIntent = Math.max(...Object.values(intentConfidence || {}).map(v => v.confidence || 0), 0)
+    debugLog("moderation.action", {
+      guildId,
+      sourceUserId,
+      targetUserId,
+      directedSeverity,
+      maxIntent,
+      mode: "sim_stub"
+    })
   }
 
   startApiIfEnabled() {

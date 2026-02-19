@@ -10,39 +10,69 @@ const interventionLevel = ({ globalRisk, directedRisk, clusterRisk, intentConfid
   return 0
 }
 
-const executeEnforcement = async ({
-  guildId,
-  sourceUserId,
-  targetId,
-  directedSeverity,
-  rawLevel,
-  effectiveLevel,
-  intent,
-  globalRisk,
-  deps = {}
-}) => {
-  const isDirected = Boolean(targetId)
+const handleDirectedEnforcement = async ({ context, effectiveLevel, thresholds, maxEnforcementLevel, actions }) => {
+  const { guildId, userId, targetId, directedSeverity, intentConfidence } = context
+  const maxIntent = Math.max(...Object.values(intentConfidence || {}).map(v => v.confidence || 0), 0)
 
-  console.log("ENFORCEMENT EXECUTED", {
-    level: rawLevel,
-    effectiveLevel,
-    targetId: targetId || null
+  console.log("DIRECTED ENFORCEMENT", {
+    sourceUserId: userId,
+    targetUserId: targetId,
+    directedSeverity,
+    effectiveLevel
   })
 
-  if (isDirected && effectiveLevel >= 2 && typeof deps.onVictimProtection === "function") {
-    await deps.onVictimProtection()
+  const intentCriticalBreach = directedSeverity >= thresholds.intentCritical || maxIntent >= thresholds.intentCritical
+  const shouldProtectEarly = (maxEnforcementLevel > 0 && directedSeverity >= thresholds.protectionEarly) || intentCriticalBreach
+
+  if (shouldProtectEarly) {
+    try {
+      await actions.triggerVictimProtection?.({ guildId, sourceUserId: userId, targetUserId: targetId, severity: directedSeverity, intentConfidence })
+    } catch (error) {
+      console.error("[SIM] Directed victim protection failed", error)
+    }
   }
 
-  if (isDirected && effectiveLevel >= 3 && typeof deps.onModeratorAlert === "function") {
-    await deps.onModeratorAlert({ guildId, sourceUserId, targetId, directedSeverity, intent, globalRisk, effectiveLevel })
+  if (intentCriticalBreach) {
+    await actions.notifyModerators?.({ guildId, sourceUserId: userId, targetUserId: targetId, directedSeverity, intentConfidence, critical: true })
+    return
   }
 
-  if (effectiveLevel >= 4 && typeof deps.onFormalModeration === "function") {
-    await deps.onFormalModeration({ guildId, sourceUserId, targetId, directedSeverity, intent, globalRisk, effectiveLevel })
+  if (effectiveLevel >= 3) {
+    await actions.notifyModerators?.({ guildId, sourceUserId: userId, targetUserId: targetId, directedSeverity, intentConfidence })
+  }
+
+  if (effectiveLevel >= 4) {
+    await actions.formalModerationAction?.({ guildId, sourceUserId: userId, targetUserId: targetId, directedSeverity, intentConfidence })
+  }
+}
+
+const handleGlobalEnforcement = async ({ context, effectiveLevel, actions }) => {
+  if (effectiveLevel >= 4) {
+    await actions.formalModerationAction?.({
+      guildId: context.guildId,
+      sourceUserId: context.userId,
+      targetUserId: null,
+      directedSeverity: 0,
+      intentConfidence: context.intentConfidence
+    })
+  }
+}
+
+const handleAssessment = async ({ context, level, effectiveLevel, thresholds, maxEnforcementLevel, actions = {} }) => {
+  console.log("ENFORCEMENT EXECUTED", {
+    level,
+    effectiveLevel,
+    targetId: context.targetId || null
+  })
+
+  if (context.targetId) {
+    await handleDirectedEnforcement({ context, effectiveLevel, thresholds, maxEnforcementLevel, actions })
+  } else {
+    await handleGlobalEnforcement({ context, effectiveLevel, actions })
   }
 }
 
 module.exports = {
   interventionLevel,
-  executeEnforcement
+  handleAssessment
 }

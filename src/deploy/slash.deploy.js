@@ -7,6 +7,11 @@ const { isCommandEnabled } = require("../utils/commandToggle")
 if (!process.env.TOKEN) throw new Error("Missing TOKEN")
 if (!process.env.CLIENT_ID) throw new Error("Missing CLIENT_ID")
 
+const useGuildDeploy = process.env.USE_GUILD_DEPLOY === "true"
+if (useGuildDeploy && !process.env.GUILD_ID) {
+  throw new Error("Missing GUILD_ID for USE_GUILD_DEPLOY=true")
+}
+
 const commands = []
 const names = new Set()
 const base = path.join(__dirname, "../commands")
@@ -50,33 +55,17 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
   try {
     loadCommands()
 
-    const useGuildDeploy = process.env.USE_GUILD_DEPLOY === "true"
-    if (useGuildDeploy && !process.env.GUILD_ID) {
-      throw new Error("Missing GUILD_ID for guild deploy")
-    }
-
+    const payload = JSON.stringify(commands)
+    const payloadSize = Buffer.byteLength(payload)
     const route = useGuildDeploy
       ? Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID)
       : Routes.applicationCommands(process.env.CLIENT_ID)
 
-    const payload = JSON.stringify(commands)
-    const payloadSize = Buffer.byteLength(payload)
-
     console.log("Deploying", commands.length, "commands")
     console.log("Deploy route:", route)
-    console.log("Payload bytes:", payloadSize)
+    console.log("Payload size:", payloadSize)
 
-    if (payloadSize > 200 * 1024) {
-      console.warn("Payload exceeds 200KB, global deploy may be slow")
-    }
-    //console.log("Deploying", commands.length, "commands")
-
-    console.log("About to PUT")
-
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    )
+    await rest.put(route, { body: commands })
 
     console.log("PUT returned")
 

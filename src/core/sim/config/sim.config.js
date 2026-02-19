@@ -6,8 +6,10 @@ module.exports = {
   retentionMs: Number(process.env.SIM_RETENTION_MS || 1000 * 60 * 60 * 24 * 14),
   evidenceRetentionMs: Number(process.env.SIM_EVIDENCE_RETENTION_MS || 1000 * 60 * 60 * 24 * 30),
   minorProtectionMode: process.env.SIM_MINOR_PROTECTION_MODE === "true",
+  logChannelId: process.env.SIM_LOG_CHANNEL_ID || null,
   thresholds: {
     groomingSoft: Number(process.env.SIM_THRESHOLD_GROOMING_SOFT || 0.62),
+    protectionEarly: Number(process.env.SIM_THRESHOLD_PROTECTION_EARLY || 0.6),
     intentCritical: Number(process.env.SIM_THRESHOLD_INTENT_CRITICAL || 0.93),
     clusterCoordination: Number(process.env.SIM_THRESHOLD_CLUSTER || 0.7),
     intervention: {
