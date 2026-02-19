@@ -67,7 +67,9 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
 
     await rest.put(route, { body: commands })
 
-    console.log("Deploy successful")
+    console.log("PUT returned")
+
+    //console.log("Deploy successful")
   } catch (err) {
     console.error("Deploy failed")
     console.error(err)
