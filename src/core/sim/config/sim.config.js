@@ -1,5 +1,8 @@
 module.exports = {
-  enabled: process.env.SIM_ENABLED !== "false",
+  enabled: process.env.SIM_ENABLED === "true",
+  debug: process.env.SIM_DEBUG === "true",
+  testMode: process.env.SIM_TEST_MODE === "true",
+  maxEnforcementLevel: Math.min(4, Math.max(0, Number(process.env.SIM_ENFORCEMENT_LEVEL || 4))),
   retentionMs: Number(process.env.SIM_RETENTION_MS || 1000 * 60 * 60 * 24 * 14),
   evidenceRetentionMs: Number(process.env.SIM_EVIDENCE_RETENTION_MS || 1000 * 60 * 60 * 24 * 30),
   minorProtectionMode: process.env.SIM_MINOR_PROTECTION_MODE === "true",

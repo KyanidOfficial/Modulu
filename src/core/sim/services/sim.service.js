@@ -10,6 +10,7 @@ const { appendEvidence, exportEvidence } = require("./evidenceIntegrity.service"
 const { interventionLevel } = require("./enforcementOrchestrator.service")
 const { clamp01 } = require("../models/userRiskState")
 const { startModeratorApi } = require("./moderatorApi.service")
+const { debugLog } = require("./debugLogger.service")
 
 class SimService {
   constructor(config = simConfig) {
@@ -19,6 +20,73 @@ class SimService {
     this.apiServer = null
 
     setInterval(() => this.store.gc(), 60 * 1000).unref()
+  }
+
+  async evaluateAssessment({ guildId, userId, targetId = null, content = "", channelId = null, createdAt = Date.now() }) {
+    const state = this.store.getUserState(guildId, userId)
+    const intent = scoreIntent({
+      templates: this.templates,
+      messageContent: content,
+      derivativeVector: [state.metadata.velocity, state.metadata.acceleration, state.metadata.volatility]
+    })
+
+    const directedMatrix = this.store.getDirectedMatrix(guildId)
+    const directed = targetId ? directedMatrix.get(`${userId}->${targetId}`) || null : null
+
+    const graph = this.store.getGuildGraph(guildId)
+    const cluster = await detectClusterAsync({ graph, threshold: this.config.thresholds.clusterCoordination })
+
+    if (cluster.isCluster) {
+      state.dimensions.coordinationLikelihood = clamp01(Math.max(state.dimensions.coordinationLikelihood, cluster.clusterCoefficient))
+      debugLog("cluster.detected", { guildId, userId, clusterCoefficient: cluster.clusterCoefficient })
+    }
+
+    const globalRisk = clamp01(
+      (state.dimensions.spamAggression +
+        state.dimensions.groomingProbability +
+        state.dimensions.harassmentEscalation +
+        state.dimensions.socialEngineering +
+        state.dimensions.coordinationLikelihood +
+        state.dimensions.manipulationProbing) / 6
+    )
+
+    const rawLevel = interventionLevel({
+      globalRisk,
+      directedRisk: directed ? Math.max(directed.grooming, directed.harassment, directed.manipulation) : 0,
+      clusterRisk: cluster.clusterCoefficient,
+      intentConfidence: intent,
+      thresholds: this.config.thresholds
+    })
+
+    const level = Math.min(rawLevel, this.config.maxEnforcementLevel)
+    this.store.intentByUser.set(`${guildId}:${userId}`, intent)
+    if (targetId) this.store.intentByPair.set(`${guildId}:${userId}->${targetId}`, intent)
+
+    debugLog("assessment.updated", {
+      guildId,
+      userId,
+      targetId,
+      globalRisk,
+      rawLevel,
+      effectiveLevel: level,
+      velocity: state.metadata.velocity,
+      acceleration: state.metadata.acceleration
+    })
+
+    if (level >= 3 && targetId && channelId) {
+      appendEvidence({
+        store: this.store,
+        sessionId: `${guildId}:${userId}:${targetId}`,
+        payload: {
+          messageContent: String(content || ""),
+          timestamp: createdAt,
+          channelId,
+          directedPair: `${userId}->${targetId}`
+        }
+      })
+    }
+
+    return { globalRisk, rawLevel, level, intent, directed, cluster, state }
   }
 
   async handleMessage(message) {
@@ -33,25 +101,35 @@ class SimService {
       ? (Date.now() - message.member.joinedTimestamp) / (1000 * 60 * 60 * 24)
       : 0
 
-    const riskResult = scoreMessageRisk({ state, message, accountAgeDays, serverTenureDays })
-
-    const intent = scoreIntent({
-      templates: this.templates,
-      messageContent: message.content,
-      derivativeVector: [state.metadata.velocity, state.metadata.acceleration, state.metadata.volatility]
+    scoreMessageRisk({ state, message, accountAgeDays, serverTenureDays })
+    debugLog("risk.dimension.update", {
+      guildId,
+      userId,
+      spamAggression: state.dimensions.spamAggression,
+      groomingProbability: state.dimensions.groomingProbability,
+      harassmentEscalation: state.dimensions.harassmentEscalation,
+      coordinationLikelihood: state.dimensions.coordinationLikelihood
     })
 
+    const targetId = message.mentions?.users?.first?.()?.id || null
     const matrix = this.store.getDirectedMatrix(guildId)
-    const targetId = message.mentions?.users?.first?.()?.id
-    let directed = null
 
     if (this.config.featureFlags.directedModeling && targetId) {
-      directed = updateDirectedRisk(matrix, userId, targetId, {
+      const directed = updateDirectedRisk(matrix, userId, targetId, {
         grooming: state.dimensions.groomingProbability,
         harassment: state.dimensions.harassmentEscalation,
         manipulation: state.dimensions.manipulationProbing,
         velocity: clamp01(Math.abs(state.metadata.velocity) * 1000),
         lastInteraction: Date.now()
+      })
+
+      debugLog("directed.update", {
+        guildId,
+        fromId: userId,
+        toId: targetId,
+        grooming: directed.grooming,
+        harassment: directed.harassment,
+        manipulation: directed.manipulation
       })
 
       if (directed.grooming >= this.config.thresholds.groomingSoft && this.config.featureFlags.victimPreContact) {
@@ -61,53 +139,40 @@ class SimService {
 
     const graph = this.store.getGuildGraph(guildId)
     updateGraphFromMessage(graph, message)
-    const cluster = await detectClusterAsync({ graph, threshold: this.config.thresholds.clusterCoordination })
 
-    if (cluster.isCluster) {
-      state.dimensions.coordinationLikelihood = clamp01(Math.max(state.dimensions.coordinationLikelihood, cluster.clusterCoefficient))
-    }
-
-    const globalRisk = clamp01(
-      (state.dimensions.spamAggression +
-      state.dimensions.groomingProbability +
-      state.dimensions.harassmentEscalation +
-      state.dimensions.socialEngineering +
-      state.dimensions.coordinationLikelihood +
-      state.dimensions.manipulationProbing) / 6
-    )
-
-    const level = interventionLevel({
-      globalRisk,
-      directedRisk: directed ? Math.max(directed.grooming, directed.harassment, directed.manipulation) : 0,
-      clusterRisk: cluster.clusterCoefficient,
-      intentConfidence: intent,
-      thresholds: this.config.thresholds
+    return this.evaluateAssessment({
+      guildId,
+      userId,
+      targetId,
+      content: message.content,
+      channelId: message.channel?.id,
+      createdAt: message.createdTimestamp || Date.now()
     })
+  }
 
-    if (level >= 3 && targetId) {
-      appendEvidence({
-        store: this.store,
-        sessionId: `${guildId}:${userId}:${targetId}`,
-        payload: {
-          messageContent: String(message.content || ""),
-          timestamp: message.createdTimestamp || Date.now(),
-          channelId: message.channel.id,
-          directedPair: `${userId}->${targetId}`
-        }
-      })
+  resetUserState(guildId, userId) {
+    this.store.userRisk.delete(`${guildId}:${userId}`)
+    this.store.intentByUser.delete(`${guildId}:${userId}`)
+
+    const matrix = this.store.getDirectedMatrix(guildId)
+    for (const key of matrix.keys()) {
+      if (key.startsWith(`${userId}->`) || key.endsWith(`->${userId}`)) {
+        matrix.delete(key)
+      }
     }
-
-    this.store.intentByUser.set(`${guildId}:${userId}`, intent)
-    if (targetId) this.store.intentByPair.set(`${guildId}:${userId}->${targetId}`, intent)
-
-    return { globalRisk, level, intent, directed, cluster, state: riskResult.state }
   }
 
   getUserReport(guildId, userId) {
     const state = this.store.userRisk.get(`${guildId}:${userId}`) || null
     const intent = this.store.intentByUser.get(`${guildId}:${userId}`) || {}
     const directed = this.store.getDirectedMatrix(guildId)
-    return { state, velocity: state?.metadata, intent, directedRisks: [...directed.entries()].filter(([pair]) => pair.startsWith(`${userId}->`)) }
+    return {
+      state,
+      velocity: state?.metadata,
+      intent,
+      effectiveEnforcementCap: this.config.maxEnforcementLevel,
+      directedRisks: [...directed.entries()].filter(([pair]) => pair.startsWith(`${userId}->`))
+    }
   }
 
   getClusterReport(guildId) {
@@ -126,7 +191,7 @@ class SimService {
   }
 
   startApiIfEnabled() {
-    if (!this.config.api.enabled || this.apiServer) return
+    if (!this.config.enabled || !this.config.api.enabled || this.apiServer) return
     this.apiServer = startModeratorApi({ simService: this, port: this.config.api.port })
   }
 }

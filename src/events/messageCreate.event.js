@@ -30,7 +30,8 @@ module.exports = async (client, message) => {
 
   if (!message.content && message.attachments.size === 0) return
 
-  await safeHandlerRun(() => getSimService().handleMessage(message))
+  const sim = getSimService()
+  if (sim) await safeHandlerRun(() => sim.handleMessage(message))
 
   const automodResult = await automod.handleMessage(message).catch(() => ({ blocked: false }))
   if (automodResult?.blocked) return
