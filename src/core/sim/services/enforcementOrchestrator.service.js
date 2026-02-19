@@ -10,6 +10,39 @@ const interventionLevel = ({ globalRisk, directedRisk, clusterRisk, intentConfid
   return 0
 }
 
+const executeEnforcement = async ({
+  guildId,
+  sourceUserId,
+  targetId,
+  directedSeverity,
+  rawLevel,
+  effectiveLevel,
+  intent,
+  globalRisk,
+  deps = {}
+}) => {
+  const isDirected = Boolean(targetId)
+
+  console.log("ENFORCEMENT EXECUTED", {
+    level: rawLevel,
+    effectiveLevel,
+    targetId: targetId || null
+  })
+
+  if (isDirected && effectiveLevel >= 2 && typeof deps.onVictimProtection === "function") {
+    await deps.onVictimProtection()
+  }
+
+  if (isDirected && effectiveLevel >= 3 && typeof deps.onModeratorAlert === "function") {
+    await deps.onModeratorAlert({ guildId, sourceUserId, targetId, directedSeverity, intent, globalRisk, effectiveLevel })
+  }
+
+  if (effectiveLevel >= 4 && typeof deps.onFormalModeration === "function") {
+    await deps.onFormalModeration({ guildId, sourceUserId, targetId, directedSeverity, intent, globalRisk, effectiveLevel })
+  }
+}
+
 module.exports = {
-  interventionLevel
+  interventionLevel,
+  executeEnforcement
 }
