@@ -4,6 +4,7 @@ const sbDebug = require("./messages/sbDebug")
 const giveawayTrigger = require("./messages/giveawayTrigger")
 const handleApplicationDm = require("../modules/applications/dm.handler")
 const automod = require("../modules/automod/service")
+const { getSimService } = require("../core/sim")
 
 const isDmBasedChannel = channel =>
   Boolean(channel && typeof channel.isDMBased === "function" && channel.isDMBased())
@@ -28,6 +29,8 @@ module.exports = async (client, message) => {
   }
 
   if (!message.content && message.attachments.size === 0) return
+
+  await safeHandlerRun(() => getSimService().handleMessage(message))
 
   const automodResult = await automod.handleMessage(message).catch(() => ({ blocked: false }))
   if (automodResult?.blocked) return

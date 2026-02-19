@@ -1,0 +1,8 @@
+{
+  "name": "harassmentEscalation",
+  "stages": ["friction", "insults", "targeted_pattern", "threatening_tone"],
+  "transitionWeights": [0.2, 0.25, 0.25, 0.3],
+  "decayFactor": 0.9,
+  "timeWindow": 86400000,
+  "derivativeProfile": [0.16, 0.33, 0.49, 0.7]
+}
