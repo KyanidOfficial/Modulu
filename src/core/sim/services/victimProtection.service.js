@@ -4,8 +4,10 @@ const buildNeutralNotice = () => ({
   content: "We noticed unusual interaction patterns. If you want, you can enable extra safety options: interaction shield, evidence vault, or silent escalation."
 })
 
-const triggerVictimProtection = async ({ victimUser, store, sourceId, targetId }) => {
-  await maybeDM(victimUser, buildNeutralNotice()).catch(() => null)
+const triggerVictimProtection = async ({ guildId, victimUser, store, sourceId, targetId }) => {
+  if (victimUser) {
+    await maybeDM(guildId, victimUser, buildNeutralNotice()).catch(() => null)
+  }
 
   const key = `${sourceId}->${targetId}`
   store.interactionPolicies.set(key, {

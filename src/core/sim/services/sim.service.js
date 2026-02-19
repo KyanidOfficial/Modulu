@@ -11,6 +11,7 @@ const { interventionLevel } = require("./enforcementOrchestrator.service")
 const { clamp01 } = require("../models/userRiskState")
 const { startModeratorApi } = require("./moderatorApi.service")
 const { debugLog } = require("./debugLogger.service")
+const { normalizeDirectedRisk } = require("../utils/normalizeDirectedRisk")
 
 class SimService {
   constructor(config = simConfig) {
@@ -22,7 +23,7 @@ class SimService {
     setInterval(() => this.store.gc(), 60 * 1000).unref()
   }
 
-  async evaluateAssessment({ guildId, userId, targetId = null, content = "", channelId = null, createdAt = Date.now() }) {
+  async evaluateAssessment({ guildId, userId, targetId = null, victimUser = null, content = "", channelId = null, createdAt = Date.now() }) {
     const state = this.store.getUserState(guildId, userId)
     const intent = scoreIntent({
       templates: this.templates,
@@ -50,9 +51,19 @@ class SimService {
         state.dimensions.manipulationProbing) / 6
     )
 
+    const directedSeverity = normalizeDirectedRisk(directed)
+    const maxIntent = Math.max(...Object.values(intent || {}).map(v => v.confidence || 0), 0)
+
+    console.log("INTERVENTION INPUTS", {
+      globalRisk,
+      directedSeverity,
+      clusterRisk: cluster.clusterCoefficient,
+      maxIntent
+    })
+
     const rawLevel = interventionLevel({
       globalRisk,
-      directedRisk: directed ? Math.max(directed.grooming, directed.harassment, directed.manipulation) : 0,
+      directedRisk: directedSeverity,
       clusterRisk: cluster.clusterCoefficient,
       intentConfidence: intent,
       thresholds: this.config.thresholds
@@ -72,6 +83,16 @@ class SimService {
       velocity: state.metadata.velocity,
       acceleration: state.metadata.acceleration
     })
+
+
+    if (
+      targetId &&
+      directedSeverity >= this.config.thresholds.intervention.level2 &&
+      level >= 2 &&
+      this.config.featureFlags.victimPreContact
+    ) {
+      await triggerVictimProtection({ guildId, victimUser, store: this.store, sourceId: userId, targetId })
+    }
 
     if (level >= 3 && targetId && channelId) {
       appendEvidence({
@@ -132,9 +153,6 @@ class SimService {
         manipulation: directed.manipulation
       })
 
-      if (directed.grooming >= this.config.thresholds.groomingSoft && this.config.featureFlags.victimPreContact) {
-        await triggerVictimProtection({ victimUser: message.mentions.users.first(), store: this.store, sourceId: userId, targetId })
-      }
     }
 
     const graph = this.store.getGuildGraph(guildId)
@@ -144,6 +162,7 @@ class SimService {
       guildId,
       userId,
       targetId,
+      victimUser: message.mentions?.users?.first?.() || null,
       content: message.content,
       channelId: message.channel?.id,
       createdAt: message.createdTimestamp || Date.now()
