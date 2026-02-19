@@ -50,12 +50,27 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
   try {
     loadCommands()
 
-    console.log("Deploying", commands.length, "commands")
+    const useGuildDeploy = process.env.USE_GUILD_DEPLOY === "true"
+    if (useGuildDeploy && !process.env.GUILD_ID) {
+      throw new Error("Missing GUILD_ID for guild deploy")
+    }
 
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    )
+    const route = useGuildDeploy
+      ? Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID)
+      : Routes.applicationCommands(process.env.CLIENT_ID)
+
+    const payload = JSON.stringify(commands)
+    const payloadSize = Buffer.byteLength(payload)
+
+    console.log("Deploying", commands.length, "commands")
+    console.log("Deploy route:", route)
+    console.log("Payload bytes:", payloadSize)
+
+    if (payloadSize > 200 * 1024) {
+      console.warn("Payload exceeds 200KB, global deploy may be slow")
+    }
+
+    await rest.put(route, { body: commands })
 
     console.log("Deploy successful")
   } catch (err) {

@@ -7,7 +7,7 @@ const { updateDirectedRisk } = require("../models/directedRiskMatrix")
 const { updateGraphFromMessage, detectClusterAsync } = require("../engines/graphIntelligence.engine")
 const { triggerVictimProtection } = require("./victimProtection.service")
 const { appendEvidence, exportEvidence } = require("./evidenceIntegrity.service")
-const { interventionLevel } = require("./enforcementOrchestrator.service")
+const { interventionLevel, executeEnforcement } = require("./enforcementOrchestrator.service")
 const { clamp01 } = require("../models/userRiskState")
 const { startModeratorApi } = require("./moderatorApi.service")
 const { debugLog } = require("./debugLogger.service")
@@ -85,14 +85,29 @@ class SimService {
     })
 
 
-    if (
-      targetId &&
-      directedSeverity >= this.config.thresholds.intervention.level2 &&
-      level >= 2 &&
-      this.config.featureFlags.victimPreContact
-    ) {
-      await triggerVictimProtection({ guildId, victimUser, store: this.store, sourceId: userId, targetId })
-    }
+    await executeEnforcement({
+      guildId,
+      sourceUserId: userId,
+      targetId,
+      directedSeverity,
+      rawLevel,
+      effectiveLevel: level,
+      intent,
+      globalRisk,
+      deps: {
+        onVictimProtection: targetId && directedSeverity >= this.config.thresholds.intervention.level2 && this.config.featureFlags.victimPreContact
+          ? () => triggerVictimProtection({ guildId, victimUser, store: this.store, sourceId: userId, targetId })
+          : null,
+        onModeratorAlert: async context => {
+          debugLog("enforcement.moderatorAlert", context)
+          console.log("SIM MODERATOR ALERT", context)
+        },
+        onFormalModeration: async context => {
+          debugLog("enforcement.formalAction", context)
+          console.log("SIM FORMAL MODERATION", context)
+        }
+      }
+    })
 
     if (level >= 3 && targetId && channelId) {
       appendEvidence({
