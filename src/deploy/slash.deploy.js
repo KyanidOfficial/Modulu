@@ -50,14 +50,21 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
   try {
     loadCommands()
 
-    console.log("Deploying", commands.length, "commands")
+    //console.log("Deploying", commands.length, "commands")
+
+    console.log("About to PUT")
 
     await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
+      Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.GUILD_ID
+      ),
       { body: commands }
     )
 
-    console.log("Deploy successful")
+    console.log("PUT returned")
+
+    //console.log("Deploy successful")
   } catch (err) {
     console.error("Deploy failed")
     console.error(err)
