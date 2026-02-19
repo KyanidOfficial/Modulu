@@ -36,20 +36,38 @@ const triggerVictimProtection = async ({
   severity = 0,
   intentConfidence = {},
   logChannelId = null,
-  cooldownMs = 15 * 60 * 1000
+  cooldownMs = 15 * 60 * 1000,
+  force = false,
+  effectiveLevel = null
 }) => {
   const key = `${sourceId}->${targetId}`
   const existing = store.interactionPolicies.get(key) || null
   const lastProtectionTimestamp = existing?.lastProtectionTimestamp || 0
   const now = Date.now()
-  const shouldContactVictim = now - lastProtectionTimestamp >= cooldownMs
+  const cooldownActive = now - lastProtectionTimestamp < cooldownMs
+  const shouldContactVictim = force ? true : !cooldownActive
 
-  if (shouldContactVictim && victimUser) {
-    await maybeDM(guildId, victimUser, buildNeutralNotice()).catch(error => {
-      console.error("[SIM] VictimProtection DM failed", { guildId, sourceId, targetId, error: error?.message })
-    })
+  console.log("[SIM] Protection decision", {
+    shouldContactVictim,
+    victimResolved: !!victimUser,
+    cooldownActive,
+    force
+  })
+
+  if (!victimUser) {
+    console.warn("[SIM] Victim user unresolved; skipping DM", { guildId, sourceId, targetId })
+    return { triggered: false, reason: "victim_unresolved", lastProtectionTimestamp }
   }
 
+  if (shouldContactVictim) {
+    try {
+      await maybeDM(guildId, victimUser, buildNeutralNotice())
+      console.log("[SIM] Victim DM sent", { guildId, sourceId, targetId })
+    } catch (error) {
+      console.error("[SIM] Victim DM failed", { guildId, sourceId, targetId, error: error?.message })
+      return { triggered: false, reason: "dm_failed", lastProtectionTimestamp }
+    }
+  }
 
   await logToSimChannel({ guildId, sourceId, targetId, severity, intentConfidence, victimUser, logChannelId })
 
@@ -60,7 +78,8 @@ const triggerVictimProtection = async ({
     forceModeratedChannel: existing?.forceModeratedChannel || false,
     activatedByVictim: existing?.activatedByVictim || false,
     lastProtectionTimestamp: shouldContactVictim ? now : lastProtectionTimestamp,
-    updatedAt: now
+    updatedAt: now,
+    lastProtectionLevel: effectiveLevel
   })
 
   return { triggered: shouldContactVictim, lastProtectionTimestamp: shouldContactVictim ? now : lastProtectionTimestamp }

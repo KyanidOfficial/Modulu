@@ -14,7 +14,7 @@ const handleDirectedEnforcement = async ({ context, effectiveLevel, thresholds, 
   const { guildId, userId, targetId, directedSeverity, intentConfidence } = context
   const maxIntent = Math.max(...Object.values(intentConfidence || {}).map(v => v.confidence || 0), 0)
 
-  console.log("DIRECTED ENFORCEMENT", {
+  console.log("[SIM] DIRECTED ENFORCEMENT START", {
     sourceUserId: userId,
     targetUserId: targetId,
     directedSeverity,
@@ -28,26 +28,30 @@ const handleDirectedEnforcement = async ({ context, effectiveLevel, thresholds, 
 
   // Rule 1: Early warning protection can trigger at level 1, never at level 0 (unless intent-critical failsafe)
   if ((effectiveLevel >= 1 && crossedProtectionEarly) || intentCriticalBreach) {
-    const result = await actions.triggerVictimProtection?.({ guildId, sourceUserId: userId, targetUserId: targetId, severity: directedSeverity, intentConfidence })
+    const result = await actions.triggerVictimProtection?.({ guildId, sourceUserId: userId, targetUserId: targetId, severity: directedSeverity, intentConfidence, effectiveLevel, force: intentCriticalBreach })
     protectionSatisfied = true
-    console.log("PROTECTION TRIGGERED", {
-      sourceUserId: userId,
-      targetUserId: targetId,
-      directedSeverity,
-      effectiveLevel
-    })
+    if (result?.triggered) {
+      console.log("PROTECTION TRIGGERED", {
+        sourceUserId: userId,
+        targetUserId: targetId,
+        directedSeverity,
+        effectiveLevel
+      })
+    }
   }
 
   // Rule 2: Level 2 must ensure victim protection has executed
   if (effectiveLevel >= 2 && !protectionSatisfied) {
-    await actions.triggerVictimProtection?.({ guildId, sourceUserId: userId, targetUserId: targetId, severity: directedSeverity, intentConfidence, force: true })
+    const result = await actions.triggerVictimProtection?.({ guildId, sourceUserId: userId, targetUserId: targetId, severity: directedSeverity, intentConfidence, force: true, effectiveLevel })
     protectionSatisfied = true
-    console.log("PROTECTION TRIGGERED", {
-      sourceUserId: userId,
-      targetUserId: targetId,
-      directedSeverity,
-      effectiveLevel
-    })
+    if (result?.triggered) {
+      console.log("PROTECTION TRIGGERED", {
+        sourceUserId: userId,
+        targetUserId: targetId,
+        directedSeverity,
+        effectiveLevel
+      })
+    }
   }
 
   // Failsafe: intentCritical alerts moderators regardless of cap.

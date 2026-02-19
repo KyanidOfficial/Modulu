@@ -23,7 +23,7 @@ class SimService {
     setInterval(() => this.store.gc(), 60 * 1000).unref()
   }
 
-  async evaluateAssessment({ guildId, userId, targetId = null, victimUser = null, content = "", channelId = null, createdAt = Date.now() }) {
+  async evaluateAssessment({ guildId, userId, targetId = null, victimUser = null, client = null, content = "", channelId = null, createdAt = Date.now() }) {
     const state = this.store.getUserState(guildId, userId)
     const intent = scoreIntent({
       templates: this.templates,
@@ -107,18 +107,37 @@ class SimService {
         thresholds: this.config.thresholds,
         maxEnforcementLevel: dynamicCap,
         actions: {
-          triggerVictimProtection: async ({ guildId: gId, sourceUserId, targetUserId, severity, intentConfidence, force = false }) => {
+          triggerVictimProtection: async ({ guildId: gId, sourceUserId, targetUserId, severity, intentConfidence, force = false, effectiveLevel = null }) => {
             if (!this.config.featureFlags.victimPreContact) return false
+
+            const resolvedVictimUser = victimUser || await client?.users?.fetch?.(targetUserId).catch(err => {
+              console.error("[SIM] Failed to fetch victim user", {
+                guildId: gId,
+                targetId: targetUserId,
+                error: err?.message
+              })
+              return null
+            })
+
+            console.log("[SIM] Victim fetch result", {
+              targetUserId,
+              resolved: !!resolvedVictimUser
+            })
+
+            if (!resolvedVictimUser) return { triggered: false, reason: "victim_unresolved" }
+
             return triggerVictimProtection({
               guildId: gId,
-              victimUser,
+              victimUser: resolvedVictimUser,
               store: this.store,
               sourceId: sourceUserId,
               targetId: targetUserId,
               severity,
               intentConfidence,
               logChannelId: this.config.logChannelId,
-              cooldownMs: force ? 0 : this.config.protectionCooldownMs
+              cooldownMs: force ? 0 : this.config.protectionCooldownMs,
+              force,
+              effectiveLevel
             })
           },
           notifyModerators: payload => this.notifyModerators(payload),
@@ -198,6 +217,7 @@ class SimService {
       userId,
       targetId,
       victimUser: message.mentions?.users?.first?.() || null,
+      client: message.client || null,
       content: message.content,
       channelId: message.channel?.id,
       createdAt: message.createdTimestamp || Date.now()

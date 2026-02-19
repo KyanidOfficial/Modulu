@@ -57,10 +57,12 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
 
     const payload = JSON.stringify(commands)
     const payloadSize = Buffer.byteLength(payload)
-
-    const route = Routes.applicationCommands(process.env.CLIENT_ID)
+    const route = useGuildDeploy
+      ? Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID)
+      : Routes.applicationCommands(process.env.CLIENT_ID)
 
     console.log("Deploying", commands.length, "commands")
+    console.log("Deploy route:", route)
     console.log("Payload size:", payloadSize)
 
     await rest.put(route, { body: commands })
