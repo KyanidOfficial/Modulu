@@ -3,19 +3,21 @@ const db = require("../core/database")
 
 module.exports = async (guildId, userLike, embed) => {
   if (!guildId || !userLike || !embed) {
-    console.warn("[DM DEBUG] invalid arguments", {
+    const err = new Error("[DM DEBUG] invalid arguments")
+    console.warn(err.message, {
       guildId,
       hasUser: !!userLike,
       hasEmbed: !!embed
     })
-    return
+    throw err
   }
 
   const user = userLike.user ?? userLike
 
   if (!user || !user.id) {
-    console.warn("[DM DEBUG] invalid user object")
-    return
+    const err = new Error("[DM DEBUG] invalid user object")
+    console.warn(err.message)
+    throw err
   }
 
   let enabled = true
@@ -31,17 +33,19 @@ module.exports = async (guildId, userLike, embed) => {
 
   if (!enabled) {
     console.log("[DM DEBUG] DM disabled by config", guildId)
-    return
+    return { sent: false, reason: "disabled" }
   }
 
   try {
     await sendDM(user, embed)
     console.log("[DM DEBUG] DM sent", user.id)
+    return { sent: true }
   } catch (err) {
-    console.warn("[DM DEBUG] DM failed", {
+    console.error("[DM DEBUG] DM failed", {
       userId: user.id,
       code: err?.code,
       message: err?.message
     })
+    throw err
   }
 }

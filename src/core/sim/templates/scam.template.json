@@ -1,0 +1,8 @@
+{
+  "name": "scam",
+  "stages": ["hook", "credibility", "urgency", "payment_request"],
+  "transitionWeights": [0.25, 0.25, 0.2, 0.3],
+  "decayFactor": 0.9,
+  "timeWindow": 86400000,
+  "derivativeProfile": [0.22, 0.35, 0.52, 0.68]
+}
