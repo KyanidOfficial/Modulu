@@ -7,6 +7,11 @@ const { isCommandEnabled } = require("../utils/commandToggle")
 if (!process.env.TOKEN) throw new Error("Missing TOKEN")
 if (!process.env.CLIENT_ID) throw new Error("Missing CLIENT_ID")
 
+const useGuildDeploy = process.env.USE_GUILD_DEPLOY === "true"
+if (useGuildDeploy && !process.env.GUILD_ID) {
+  throw new Error("Missing GUILD_ID for USE_GUILD_DEPLOY=true")
+}
+
 const commands = []
 const names = new Set()
 const base = path.join(__dirname, "../commands")
@@ -50,12 +55,17 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
   try {
     loadCommands()
 
-    console.log("Deploying", commands.length, "commands")
+    const payload = JSON.stringify(commands)
+    const payloadSize = Buffer.byteLength(payload)
+    const route = useGuildDeploy
+      ? Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID)
+      : Routes.applicationCommands(process.env.CLIENT_ID)
 
-    await rest.put(
-      Routes.applicationCommands(process.env.CLIENT_ID),
-      { body: commands }
-    )
+    console.log("Deploying", commands.length, "commands")
+    console.log("Deploy route:", route)
+    console.log("Payload size:", payloadSize)
+
+    await rest.put(route, { body: commands })
 
     console.log("Deploy successful")
   } catch (err) {
