@@ -7,6 +7,11 @@ const { isCommandEnabled } = require("../utils/commandToggle")
 if (!process.env.TOKEN) throw new Error("Missing TOKEN")
 if (!process.env.CLIENT_ID) throw new Error("Missing CLIENT_ID")
 
+const useGuildDeploy = process.env.USE_GUILD_DEPLOY === "true"
+if (useGuildDeploy && !process.env.GUILD_ID) {
+  throw new Error("Missing GUILD_ID for USE_GUILD_DEPLOY=true")
+}
+
 const commands = []
 const names = new Set()
 const base = path.join(__dirname, "../commands")

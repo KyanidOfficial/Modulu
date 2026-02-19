@@ -69,7 +69,14 @@ class SimService {
       thresholds: this.config.thresholds
     })
 
-    const level = Math.min(rawLevel, this.config.maxEnforcementLevel)
+    const baseEnforcementLevel = this.config.baseEnforcementLevel ?? this.config.maxEnforcementLevel
+    const dynamicCap = directedSeverity >= this.config.thresholds.intentCritical
+      ? 4
+      : directedSeverity >= this.config.thresholds.intervention.level3
+        ? Math.max(baseEnforcementLevel, 3)
+        : baseEnforcementLevel
+
+    const level = Math.min(rawLevel, dynamicCap)
     this.store.intentByUser.set(`${guildId}:${userId}`, intent)
     if (targetId) this.store.intentByPair.set(`${guildId}:${userId}->${targetId}`, intent)
 
@@ -79,6 +86,7 @@ class SimService {
       targetId,
       globalRisk,
       rawLevel,
+      dynamicCap,
       effectiveLevel: level,
       velocity: state.metadata.velocity,
       acceleration: state.metadata.acceleration
@@ -97,11 +105,11 @@ class SimService {
         level: rawLevel,
         effectiveLevel: level,
         thresholds: this.config.thresholds,
-        maxEnforcementLevel: this.config.maxEnforcementLevel,
+        maxEnforcementLevel: dynamicCap,
         actions: {
-          triggerVictimProtection: async ({ guildId: gId, sourceUserId, targetUserId, severity, intentConfidence }) => {
-            if (!this.config.featureFlags.victimPreContact) return
-            await triggerVictimProtection({
+          triggerVictimProtection: async ({ guildId: gId, sourceUserId, targetUserId, severity, intentConfidence, force = false }) => {
+            if (!this.config.featureFlags.victimPreContact) return false
+            return triggerVictimProtection({
               guildId: gId,
               victimUser,
               store: this.store,
@@ -109,7 +117,8 @@ class SimService {
               targetId: targetUserId,
               severity,
               intentConfidence,
-              logChannelId: this.config.logChannelId
+              logChannelId: this.config.logChannelId,
+              cooldownMs: force ? 0 : this.config.protectionCooldownMs
             })
           },
           notifyModerators: payload => this.notifyModerators(payload),
@@ -215,7 +224,7 @@ class SimService {
       state,
       velocity: state?.metadata,
       intent,
-      effectiveEnforcementCap: this.config.maxEnforcementLevel,
+      effectiveEnforcementCap: this.config.baseEnforcementLevel ?? this.config.maxEnforcementLevel,
       directedRisks: [...directed.entries()].filter(([pair]) => pair.startsWith(`${userId}->`))
     }
   }

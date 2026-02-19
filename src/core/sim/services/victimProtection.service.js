@@ -27,24 +27,43 @@ const logToSimChannel = async ({ guildId, sourceId, targetId, severity, intentCo
   }).catch(() => null)
 }
 
-const triggerVictimProtection = async ({ guildId, victimUser, store, sourceId, targetId, severity = 0, intentConfidence = {}, logChannelId = null }) => {
-  if (victimUser) {
+const triggerVictimProtection = async ({
+  guildId,
+  victimUser,
+  store,
+  sourceId,
+  targetId,
+  severity = 0,
+  intentConfidence = {},
+  logChannelId = null,
+  cooldownMs = 15 * 60 * 1000
+}) => {
+  const key = `${sourceId}->${targetId}`
+  const existing = store.interactionPolicies.get(key) || null
+  const lastProtectionTimestamp = existing?.lastProtectionTimestamp || 0
+  const now = Date.now()
+  const shouldContactVictim = now - lastProtectionTimestamp >= cooldownMs
+
+  if (shouldContactVictim && victimUser) {
     await maybeDM(guildId, victimUser, buildNeutralNotice()).catch(error => {
       console.error("[SIM] VictimProtection DM failed", { guildId, sourceId, targetId, error: error?.message })
     })
   }
 
+
   await logToSimChannel({ guildId, sourceId, targetId, severity, intentConfidence, victimUser, logChannelId })
 
-  const key = `${sourceId}->${targetId}`
   store.interactionPolicies.set(key, {
-    restrictDMs: false,
-    filterLinks: false,
-    messageDelayMs: 0,
-    forceModeratedChannel: false,
-    activatedByVictim: false,
-    updatedAt: Date.now()
+    restrictDMs: existing?.restrictDMs || false,
+    filterLinks: existing?.filterLinks || false,
+    messageDelayMs: existing?.messageDelayMs || 0,
+    forceModeratedChannel: existing?.forceModeratedChannel || false,
+    activatedByVictim: existing?.activatedByVictim || false,
+    lastProtectionTimestamp: shouldContactVictim ? now : lastProtectionTimestamp,
+    updatedAt: now
   })
+
+  return { triggered: shouldContactVictim, lastProtectionTimestamp: shouldContactVictim ? now : lastProtectionTimestamp }
 }
 
 module.exports = {
