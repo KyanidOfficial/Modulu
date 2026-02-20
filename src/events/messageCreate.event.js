@@ -13,8 +13,38 @@ const safeHandlerRun = async handler => {
   try {
     await handler()
   } catch {
-    // keep messageCreate stable under handler failure
   }
+}
+
+const buildDelayedPayload = message => {
+  const content = message.content ? String(message.content) : ""
+  const delayedHeader = `Delayed message from <@${message.author.id}>:`
+  const delayedContent = content ? `${delayedHeader}\n${content}` : delayedHeader
+  const files = [...message.attachments.values()].map(attachment => ({
+    attachment: attachment.url,
+    name: attachment.name || undefined
+  }))
+
+  const payload = { content: delayedContent }
+  if (files.length) payload.files = files
+  return payload
+}
+
+const scheduleDelayedResend = ({ message, delayMs }) => {
+  const payload = buildDelayedPayload(message)
+
+  setTimeout(() => {
+    Promise.resolve(
+      message.channel?.send?.(payload)
+    ).then(() => {
+      console.log("[SIM] Message re-sent after delay", {
+        guildId: message.guild?.id,
+        userId: message.author?.id,
+        channelId: message.channel?.id,
+        delayMs
+      })
+    }).catch(() => {})
+  }, delayMs)
 }
 
 module.exports = async (client, message) => {
@@ -32,6 +62,21 @@ module.exports = async (client, message) => {
 
   const sim = getSimService()
   if (sim) await safeHandlerRun(() => sim.handleMessage(message))
+
+  const delayMs = sim?.getMessageDelayMsForUser?.(message.guild.id, message.author.id) || 0
+  if (delayMs > 0) {
+    await message.delete().catch(() => null)
+
+    console.log("[SIM] Message delay applied", {
+      guildId: message.guild?.id,
+      userId: message.author?.id,
+      channelId: message.channel?.id,
+      delayMs
+    })
+
+    scheduleDelayedResend({ message, delayMs })
+    return
+  }
 
   const automodResult = await automod.handleMessage(message).catch(() => ({ blocked: false }))
   if (automodResult?.blocked) return

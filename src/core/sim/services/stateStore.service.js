@@ -12,6 +12,9 @@ class SimStateStore {
     this.intentByPair = new Map()
     this.interactionPolicies = new Map()
     this.evidenceSessions = new Map()
+    this.enforcementEscalations = new Map()
+    this.channelAlertState = new Map()
+    this.groomingSequenceByPair = new Map()
   }
 
   getUserState(guildId, userId) {
@@ -43,6 +46,27 @@ class SimStateStore {
     for (const [sessionId, session] of this.evidenceSessions.entries()) {
       if (now - session.updatedAt > this.config.evidenceRetentionMs) {
         this.evidenceSessions.delete(sessionId)
+      }
+    }
+
+    for (const [pairKey, escalation] of this.enforcementEscalations.entries()) {
+      if (now - (escalation.lastDetectionAt || 0) > ttl) {
+        this.enforcementEscalations.delete(pairKey)
+      }
+    }
+
+    for (const [alertKey, state] of this.channelAlertState.entries()) {
+      if (now - (state.updatedAt || 0) > ttl) {
+        this.channelAlertState.delete(alertKey)
+      }
+    }
+
+    for (const [pairKey, list] of this.groomingSequenceByPair.entries()) {
+      const active = (list || []).filter(ts => now - ts <= 10 * 60 * 1000)
+      if (!active.length) {
+        this.groomingSequenceByPair.delete(pairKey)
+      } else {
+        this.groomingSequenceByPair.set(pairKey, active)
       }
     }
   }
