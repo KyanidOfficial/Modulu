@@ -1,18 +1,13 @@
-const interventionLevel = ({ globalRisk, directedRisk, clusterRisk, intentConfidence, thresholds, velocity = 0, acceleration = 0 }) => {
+const interventionLevel = ({ globalRisk, directedRisk, clusterRisk, intentConfidence }) => {
   const maxIntent = Math.max(...Object.values(intentConfidence || {}).map(v => v.confidence || 0), 0)
+  const gatedClusterRisk = clusterRisk > 0.35 ? clusterRisk : 0
   const directedPriority = Math.min(1, Math.max(0, Number(directedRisk || 0) * 1.6))
-  let score = Math.max(globalRisk, clusterRisk, maxIntent, directedPriority)
+  const score = Math.max(globalRisk, maxIntent, gatedClusterRisk, directedPriority)
 
-  if (velocity > 0.02 && acceleration > 0) {
-    score = Math.min(1, score + 0.05)
-    console.log("[SIM] Momentum boost applied")
-  }
-
-  if (maxIntent >= thresholds.intentCritical) return 4
-  if (score >= thresholds.intervention.level4) return 4
-  if (score >= thresholds.intervention.level3) return 3
-  if (score >= thresholds.intervention.level2) return 2
-  if (score >= thresholds.intervention.level1) return 1
+  if (score >= 0.25) return 4
+  if (score >= 0.18) return 3
+  if (score >= 0.12) return 2
+  if (score >= 0.08) return 1
   return 0
 }
 

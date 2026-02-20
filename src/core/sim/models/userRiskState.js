@@ -24,10 +24,8 @@ const createUserRiskState = () => ({
 const updateRiskDimension = (state, dimension, observedScore, now = Date.now()) => {
   const current = clamp01(state.dimensions[dimension] || 0)
   const dtMs = Math.max(1, now - (state.metadata.lastUpdated || now))
-  const dtMinutes = Math.max(1 / 60, dtMs / 60000)
-  const retained = Math.pow(0.97, dtMinutes)
-  const signalWeight = clamp01(observedScore) * (1 - retained)
-  const next = clamp01((current * retained) + signalWeight)
+  const signalWeight = clamp01(observedScore) * 0.03
+  const next = clamp01((current * 0.97) + signalWeight)
   state.dimensions[dimension] = next
 
   const last = state.history[state.history.length - 1]
