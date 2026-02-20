@@ -1,17 +1,17 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
 const maybeDM = require("../../../utils/maybeDM")
 
-const buildNeutralNotice = () => ({
+const buildNeutralNotice = ({ sourceId, targetId }) => ({
   content: "Interaction patterns from this account show elevated risk signals. No action has been taken. You may enable optional protections below.",
   components: [
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("sim:shield").setLabel("Enable interaction shield").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId("sim:delay").setLabel("Enable message delay").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("sim:links").setLabel("Enable link filtering").setStyle(ButtonStyle.Secondary)
+      new ButtonBuilder().setCustomId(`sim:shield:${sourceId}:${targetId}`).setLabel("Enable interaction shield").setStyle(ButtonStyle.Primary),
+      new ButtonBuilder().setCustomId(`sim:delay:${sourceId}:${targetId}`).setLabel("Enable message delay").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`sim:links:${sourceId}:${targetId}`).setLabel("Enable link filtering").setStyle(ButtonStyle.Secondary)
     ),
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId("sim:evidence").setLabel("Open evidence vault").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId("sim:report").setLabel("Silent report").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder().setCustomId(`sim:evidence:${sourceId}:${targetId}`).setLabel("Open evidence vault").setStyle(ButtonStyle.Secondary),
+      new ButtonBuilder().setCustomId(`sim:report:${sourceId}:${targetId}`).setLabel("Silent report").setStyle(ButtonStyle.Danger)
     )
   ]
 })
@@ -44,14 +44,18 @@ const triggerVictimProtection = async ({
   const existing = store.interactionPolicies.get(key) || null
   const lastProtectionTimestamp = existing?.lastProtectionTimestamp || 0
   const now = Date.now()
+  const firstDetection = !lastProtectionTimestamp
+  const forceImmediateByLevel = Number(effectiveLevel || 0) >= 3 && Boolean(targetId)
   const cooldownActive = now - lastProtectionTimestamp < cooldownMs
-  const shouldContactVictim = force ? true : !cooldownActive
+  const shouldContactVictim = force || firstDetection || forceImmediateByLevel ? true : !cooldownActive
 
   console.log("[SIM] Protection decision", {
     shouldContactVictim,
     victimResolved: !!victimUser,
     cooldownActive,
-    force
+    force,
+    firstDetection,
+    effectiveLevel
   })
 
   if (!victimUser) {
@@ -60,13 +64,14 @@ const triggerVictimProtection = async ({
   }
 
   if (shouldContactVictim) {
-    try {
-      await maybeDM(guildId, victimUser, buildNeutralNotice())
-      console.log("[SIM] Victim DM sent", { guildId, sourceId, targetId })
-    } catch (error) {
-      console.error("[SIM] Victim DM failed", { guildId, sourceId, targetId, error: error?.message })
-      return { triggered: false, reason: "dm_failed", lastProtectionTimestamp }
-    }
+    console.log("[SIM] Victim DM attempt", { guildId, sourceId, targetId, effectiveLevel })
+    Promise.resolve(
+      maybeDM(guildId, victimUser, buildNeutralNotice({ sourceId, targetId }))
+    ).then(() => {
+      console.log("[SIM] Victim DM success", { guildId, sourceId, targetId, effectiveLevel })
+    }).catch(error => {
+      console.error(`[SIM] Victim DM failed: ${error?.message || "unknown"}`, { guildId, sourceId, targetId, effectiveLevel })
+    })
   }
 
   await logToSimChannel({ guildId, sourceId, targetId, severity, intentConfidence, victimUser, logChannelId })
