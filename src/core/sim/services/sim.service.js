@@ -323,7 +323,9 @@ class SimService {
       directedRisk: directedSeverity,
       clusterRisk: cluster.clusterCoefficient,
       intentConfidence: intent,
-      thresholds: this.config.thresholds
+      thresholds: this.config.thresholds,
+      velocity: state.metadata.velocity,
+      acceleration: state.metadata.acceleration
     })
 
     const baseEnforcementLevel = this.config.baseEnforcementLevel ?? this.config.maxEnforcementLevel
