@@ -18,6 +18,7 @@ const staffTimeButtons = require("./staffTime.buttons")
 const handleApplications = require("../../modules/applications/handlers")
 const { requireEnabled } = require("../../utils/commandToggle")
 const handleAutomodPanel = require("../../modules/automod/panel.handlers")
+const { getSimService } = require("../sim")
 
 const GLOBAL_FEEDBACK_CHANNEL = "1456085711802335353"
 const FEEDBACK_COOLDOWN = 1000 * 60 * 60
@@ -54,6 +55,45 @@ module.exports = async (client, interaction) => {
       BUTTONS
       =============================== */
     if (interaction.isButton()) {
+      if (interaction.customId?.startsWith("sim:")) {
+        console.log("[SIM] Button interaction received", {
+          customId: interaction.customId,
+          userId: interaction.user?.id,
+          channelId: interaction.channelId
+        })
+
+        try {
+          await interaction.deferUpdate()
+          console.log("[SIM] Button interaction acknowledged", {
+            customId: interaction.customId,
+            userId: interaction.user?.id
+          })
+        } catch (err) {
+          if (!isIgnorableInteractionError(err)) throw err
+        }
+
+        const sim = getSimService()
+        const result = sim?.applyVictimButtonAction?.({
+          customId: interaction.customId,
+          actorUserId: interaction.user?.id
+        }) || { handled: false, message: "SIM service unavailable." }
+
+        console.log("[SIM] Button action executed", {
+          customId: interaction.customId,
+          userId: interaction.user?.id,
+          handled: !!result?.handled,
+          message: result?.message || null
+        })
+
+        if (result?.message) {
+          await interaction.followUp({
+            content: result.message,
+            ephemeral: true
+          }).catch(() => {})
+        }
+        return
+      }
+
       await staffTimeButtons(interaction)
 
       const parts = interaction.customId.split("_")

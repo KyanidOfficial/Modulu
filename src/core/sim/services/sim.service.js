@@ -45,17 +45,92 @@ class SimService {
     return Math.min(4, effectiveLevel + bump)
   }
 
+  shouldDispatchChannelAlert({ guildId, sourceUserId, targetUserId, effectiveLevel }) {
+    const alertKey = `${guildId}:${sourceUserId}->${targetUserId || "none"}`
+    const existing = this.store.channelAlertState.get(alertKey) || { level: 0 }
+    if (effectiveLevel <= existing.level) return false
+    this.store.channelAlertState.set(alertKey, {
+      level: effectiveLevel,
+      updatedAt: Date.now()
+    })
+    return true
+  }
+
+  getMessageDelayMsForUser(guildId, userId) {
+    let highest = 0
+    for (const [pairKey, policy] of this.store.interactionPolicies.entries()) {
+      if (!pairKey.startsWith(`${userId}->`)) continue
+      highest = Math.max(highest, Number(policy?.messageDelayMs || 0))
+    }
+    return highest
+  }
+
+  applyVictimButtonAction({ customId, actorUserId }) {
+    const parts = String(customId || "").split(":")
+    if (parts[0] !== "sim" || parts.length < 4) return { handled: false }
+
+    const action = parts[1]
+    const sourceId = parts[2]
+    const targetId = parts[3]
+    if (!sourceId || !targetId || actorUserId !== targetId) {
+      return { handled: true, message: "You can only manage protections for your own SIM alert." }
+    }
+
+    const key = `${sourceId}->${targetId}`
+    const existing = this.store.interactionPolicies.get(key) || {
+      restrictDMs: false,
+      filterLinks: false,
+      messageDelayMs: 0,
+      forceModeratedChannel: false,
+      activatedByVictim: false
+    }
+
+    const next = {
+      ...existing,
+      activatedByVictim: true,
+      updatedAt: Date.now()
+    }
+
+    let message = "No action applied."
+    if (action === "shield") {
+      next.restrictDMs = true
+      message = "Interaction shield enabled."
+    } else if (action === "delay") {
+      next.messageDelayMs = Math.max(Number(next.messageDelayMs || 0), 4000)
+      message = `Message delay enabled (${next.messageDelayMs}ms).`
+    } else if (action === "links") {
+      next.filterLinks = true
+      message = "Link filtering enabled."
+    } else if (action === "evidence") {
+      message = `Evidence key: ${sourceId}->${targetId}`
+    } else if (action === "report") {
+      next.forceModeratedChannel = true
+      message = "Silent report signal submitted."
+    }
+
+    this.store.interactionPolicies.set(key, next)
+    return { handled: true, message }
+  }
+
   async sendSimAlertMessage({ channel, sourceUserId, targetUserId, globalRisk, directedSeverity, clusterRisk, maxIntent, rawLevel, effectiveLevel, actionTaken }) {
     if (!channel?.isTextBased?.() || typeof channel.send !== "function") return
 
+    if (!this.shouldDispatchChannelAlert({
+      guildId: channel.guild?.id || "dm",
+      sourceUserId,
+      targetUserId,
+      effectiveLevel
+    })) return
+
+    const targetMention = targetUserId ? `<@${targetUserId}>` : `<@${sourceUserId}>`
+
     const lines = [
-      "**SIM Alert**",
+      "SIM ALERT",
       `Source: <@${sourceUserId}>`,
-      targetUserId ? `Target: <@${targetUserId}>` : "Target: N/A",
+      `Target: ${targetMention}`,
       `GlobalRisk: ${Number(globalRisk || 0).toFixed(3)}`,
       `DirectedSeverity: ${Number(directedSeverity || 0).toFixed(3)}`,
-      `ClusterRisk: ${Number(clusterRisk || 0).toFixed(3)}`,
-      `MaxIntent: ${Number(maxIntent || 0).toFixed(3)}`,
+      `Intent: ${Number(maxIntent || 0).toFixed(3)}`,
       `RawLevel: ${rawLevel}`,
       `EffectiveLevel: ${effectiveLevel}`,
       `Action: ${actionTaken || "None"}`,
@@ -69,6 +144,14 @@ class SimService {
         channelId: channel?.id,
         error: error?.message
       })
+    })
+
+    console.log("[SIM] Channel alert sent", {
+      channelId: channel.id,
+      sourceUserId,
+      targetUserId,
+      effectiveLevel,
+      clusterRisk
     })
   }
 
@@ -171,8 +254,12 @@ class SimService {
           triggerVictimProtection: async ({ guildId: gId, sourceUserId, targetUserId, severity, intentConfidence, force = false, effectiveLevel = null }) => {
             if (!this.config.featureFlags.victimPreContact) return false
 
-            const resolvedVictimUser = victimUser || await client?.users?.fetch?.(targetUserId).catch(err => {
-              console.error("[SIM] Failed to fetch victim user", {
+            console.log("[SIM] Victim fetch attempt", { guildId: gId, targetUserId })
+            const resolvedVictimUser = await client?.users?.fetch?.(targetUserId).then(user => {
+              console.log("[SIM] Victim fetch success", { guildId: gId, targetUserId })
+              return user
+            }).catch(err => {
+              console.error("[SIM] Victim fetch failed", {
                 guildId: gId,
                 targetId: targetUserId,
                 error: err?.message
@@ -180,11 +267,13 @@ class SimService {
               return null
             })
 
-            if (!resolvedVictimUser) return { triggered: false, reason: "victim_unresolved" }
+            const resolvedVictim = resolvedVictimUser || victimUser || null
+
+            if (!resolvedVictim) return { triggered: false, reason: "victim_unresolved" }
 
             return triggerVictimProtection({
               guildId: gId,
-              victimUser: resolvedVictimUser,
+              victimUser: resolvedVictim,
               store: this.store,
               sourceId: sourceUserId,
               targetId: targetUserId,
