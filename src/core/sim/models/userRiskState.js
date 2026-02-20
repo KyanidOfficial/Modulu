@@ -15,27 +15,28 @@ const createUserRiskState = () => ({
     velocity: 0,
     acceleration: 0,
     volatility: 0,
-    lastUpdated: Date.now()
+    lastUpdated: Date.now(),
+    lastGroomingProbability: 0
   },
   history: []
 })
 
-const ema = (prev, next, alpha) => (alpha * next) + ((1 - alpha) * prev)
-
-const updateRiskDimension = (state, dimension, observedScore, now = Date.now(), alpha = 0.25) => {
-  const current = state.dimensions[dimension] || 0
-  const next = clamp01(ema(current, clamp01(observedScore), alpha))
+const updateRiskDimension = (state, dimension, observedScore, now = Date.now()) => {
+  const current = clamp01(state.dimensions[dimension] || 0)
+  const dtMs = Math.max(1, now - (state.metadata.lastUpdated || now))
+  const signalWeight = clamp01(observedScore) * 0.03
+  const next = clamp01((current * 0.97) + signalWeight)
   state.dimensions[dimension] = next
 
   const last = state.history[state.history.length - 1]
-  const dt = Math.max(1, now - (last?.ts || now))
+  const dtSeconds = Math.max(1, dtMs / 1000)
   const totalRisk = Object.values(state.dimensions).reduce((sum, value) => sum + value, 0)
   const prevRisk = last?.riskTotal || totalRisk
-  const velocity = (totalRisk - prevRisk) / dt
-  const acceleration = (velocity - (last?.velocity || 0)) / dt
+  const velocity = (totalRisk - prevRisk) / dtSeconds
+  const acceleration = (velocity - (last?.velocity || 0)) / dtSeconds
 
   state.history.push({ ts: now, riskTotal: totalRisk, velocity })
-  if (state.history.length > 30) state.history.shift()
+  if (state.history.length > 60) state.history.shift()
 
   const mean = state.history.reduce((sum, item) => sum + item.riskTotal, 0) / state.history.length
   const variance = state.history.reduce((sum, item) => sum + Math.pow(item.riskTotal - mean, 2), 0) / state.history.length
