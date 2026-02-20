@@ -12,13 +12,13 @@ module.exports = {
   thresholds: {
     groomingSoft: Number(process.env.SIM_THRESHOLD_GROOMING_SOFT || 0.62),
     protectionEarly: Number(process.env.SIM_THRESHOLD_PROTECTION_EARLY || 0.6),
-    intentCritical: Number(process.env.SIM_THRESHOLD_INTENT_CRITICAL || 0.93),
+    intentCritical: Number(process.env.SIM_THRESHOLD_INTENT_CRITICAL || 0.22),
     clusterCoordination: Number(process.env.SIM_THRESHOLD_CLUSTER || 0.7),
     intervention: {
-      level1: Number(process.env.SIM_LEVEL1 || 0.35),
-      level2: Number(process.env.SIM_LEVEL2 || 0.5),
-      level3: Number(process.env.SIM_LEVEL3 || 0.65),
-      level4: Number(process.env.SIM_LEVEL4 || 0.82)
+      level1: Number(process.env.SIM_LEVEL1 || 0.08),
+      level2: Number(process.env.SIM_LEVEL2 || 0.12),
+      level3: Number(process.env.SIM_LEVEL3 || 0.18),
+      level4: Number(process.env.SIM_LEVEL4 || 0.25)
     }
   },
   api: {

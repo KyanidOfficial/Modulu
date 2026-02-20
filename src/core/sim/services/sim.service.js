@@ -13,6 +13,17 @@ const { startModeratorApi } = require("./moderatorApi.service")
 const { debugLog } = require("./debugLogger.service")
 const { normalizeDirectedRisk } = require("../utils/normalizeDirectedRisk")
 
+const PRIVATE_MOVE_PATTERNS = [
+  /\bdm\b/i,
+  /private/i,
+  /somewhere else/i,
+  /don'?t tell/i,
+  /just between us/i,
+  /trust me/i
+]
+
+const isGroomingSignal = content => /secret|dm\s?me|dm|dont tell|don't tell|private|just between us|trust me|somewhere else/i.test(String(content || ""))
+
 class SimService {
   constructor(config = simConfig) {
     this.config = config
@@ -43,6 +54,20 @@ class SimService {
     })
 
     return Math.min(4, effectiveLevel + bump)
+  }
+
+  applyDirectedOverrides({ directedSeverity, groomingRising, effectiveLevel }) {
+    let nextLevel = effectiveLevel
+
+    if (directedSeverity > 0.05 && groomingRising) nextLevel = Math.max(nextLevel, 2)
+    if (directedSeverity > 0.10) nextLevel = Math.max(nextLevel, 3)
+    if (directedSeverity > 0.18) nextLevel = 4
+
+    if (nextLevel !== effectiveLevel) {
+      console.log(`[SIM] Directed override applied level=${nextLevel}`)
+    }
+
+    return nextLevel
   }
 
   shouldDispatchChannelAlert({ guildId, sourceUserId, targetUserId, effectiveLevel }) {
@@ -112,7 +137,36 @@ class SimService {
     return { handled: true, message }
   }
 
-  async sendSimAlertMessage({ channel, sourceUserId, targetUserId, globalRisk, directedSeverity, clusterRisk, maxIntent, rawLevel, effectiveLevel, actionTaken }) {
+  applyGroomingSequenceStacking({ guildId, userId, targetId, now = Date.now(), state, content }) {
+    if (!targetId || !isGroomingSignal(content)) return 1
+
+    const pairKey = `${guildId}:${userId}->${targetId}`
+    const current = this.store.groomingSequenceByPair.get(pairKey) || []
+    const active = [...current.filter(ts => now - ts <= 10 * 60 * 1000), now]
+    this.store.groomingSequenceByPair.set(pairKey, active)
+
+    const withinFive = active.filter(ts => now - ts <= 5 * 60 * 1000).length
+    if (active.length >= 5) {
+      state.dimensions.groomingProbability = clamp01(state.dimensions.groomingProbability * 2.5)
+      console.log("[SIM] Grooming escalation multiplier applied x2.5")
+      return 2.5
+    }
+
+    if (withinFive >= 3) {
+      state.dimensions.groomingProbability = clamp01(state.dimensions.groomingProbability * 1.8)
+      console.log("[SIM] Grooming sequence multiplier applied x1.8")
+      return 1.8
+    }
+
+    return 1
+  }
+
+  hasPrivateMoveSignal(content = "") {
+    const text = String(content || "")
+    return PRIVATE_MOVE_PATTERNS.some(pattern => pattern.test(text))
+  }
+
+  async sendSimAlertMessage({ channel, sourceUserId, targetUserId, globalRisk, directedSeverity, maxIntent, rawLevel, effectiveLevel, actionTaken }) {
     if (!channel?.isTextBased?.() || typeof channel.send !== "function") return
 
     if (!this.shouldDispatchChannelAlert({
@@ -133,8 +187,7 @@ class SimService {
       `Intent: ${Number(maxIntent || 0).toFixed(3)}`,
       `RawLevel: ${rawLevel}`,
       `EffectiveLevel: ${effectiveLevel}`,
-      `Action: ${actionTaken || "None"}`,
-      `Timestamp: ${new Date().toISOString()}`
+      `Action: ${actionTaken || "None"}`
     ]
 
     Promise.resolve(
@@ -150,8 +203,7 @@ class SimService {
       channelId: channel.id,
       sourceUserId,
       targetUserId,
-      effectiveLevel,
-      clusterRisk
+      effectiveLevel
     })
   }
 
@@ -191,7 +243,9 @@ class SimService {
       directedRisk: directedSeverity,
       clusterRisk: cluster.clusterCoefficient,
       intentConfidence: intent,
-      thresholds: this.config.thresholds
+      thresholds: this.config.thresholds,
+      velocity: state.metadata.velocity,
+      acceleration: state.metadata.acceleration
     })
 
     const baseEnforcementLevel = this.config.baseEnforcementLevel ?? this.config.maxEnforcementLevel
@@ -203,6 +257,10 @@ class SimService {
 
     let level = Math.min(rawLevel, dynamicCap)
     level = this.applyPairEscalation({ guildId, userId, targetId, effectiveLevel: level })
+
+    const groomingRising = state.dimensions.groomingProbability > Number(state.metadata.lastGroomingProbability || 0)
+    level = this.applyDirectedOverrides({ directedSeverity, groomingRising, effectiveLevel: level })
+
     this.store.intentByUser.set(`${guildId}:${userId}`, intent)
     if (targetId) this.store.intentByPair.set(`${guildId}:${userId}->${targetId}`, intent)
 
@@ -302,7 +360,6 @@ class SimService {
         targetUserId: targetId,
         globalRisk,
         directedSeverity,
-        clusterRisk: cluster.clusterCoefficient,
         maxIntent,
         rawLevel,
         effectiveLevel: level,
@@ -323,6 +380,8 @@ class SimService {
       })
     }
 
+    state.metadata.lastGroomingProbability = state.dimensions.groomingProbability
+
     return { globalRisk, rawLevel, level, intent, directed, cluster, state }
   }
 
@@ -338,7 +397,19 @@ class SimService {
       ? (Date.now() - message.member.joinedTimestamp) / (1000 * 60 * 60 * 24)
       : 0
 
+    const previousGrooming = state.dimensions.groomingProbability
     scoreMessageRisk({ state, message, accountAgeDays, serverTenureDays })
+
+    const targetId = message.mentions?.users?.first?.()?.id || null
+    this.applyGroomingSequenceStacking({
+      guildId,
+      userId,
+      targetId,
+      now: message.createdTimestamp || Date.now(),
+      state,
+      content: message.content
+    })
+
     debugLog("risk.dimension.update", {
       guildId,
       userId,
@@ -348,15 +419,21 @@ class SimService {
       coordinationLikelihood: state.dimensions.coordinationLikelihood
     })
 
-    const targetId = message.mentions?.users?.first?.()?.id || null
     const matrix = this.store.getDirectedMatrix(guildId)
 
     if (this.config.featureFlags.directedModeling && targetId) {
+      let grooming = state.dimensions.groomingProbability
+      if (this.hasPrivateMoveSignal(message.content)) {
+        grooming = clamp01(grooming + 0.15)
+        state.dimensions.groomingProbability = grooming
+        console.log("[SIM] Private move spike applied +0.15")
+      }
+
       const directed = updateDirectedRisk(matrix, userId, targetId, {
-        grooming: state.dimensions.groomingProbability,
+        grooming,
         harassment: state.dimensions.harassmentEscalation,
         manipulation: state.dimensions.manipulationProbing,
-        velocity: clamp01(Math.abs(state.metadata.velocity) * 1000),
+        velocity: clamp01(Math.abs(state.metadata.velocity)),
         lastInteraction: Date.now()
       })
 
@@ -368,8 +445,9 @@ class SimService {
         harassment: directed.harassment,
         manipulation: directed.manipulation
       })
-
     }
+
+    state.metadata.lastGroomingProbability = previousGrooming
 
     const graph = this.store.getGuildGraph(guildId)
     updateGraphFromMessage(graph, message)
@@ -426,7 +504,6 @@ class SimService {
   getEvidence(sessionId) {
     return exportEvidence(this.store, sessionId)
   }
-
 
   async notifyModerators({ guildId, sourceUserId, targetUserId, directedSeverity, intentConfidence }) {
     const maxIntent = Math.max(...Object.values(intentConfidence || {}).map(v => v.confidence || 0), 0)
