@@ -1,17 +1,18 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
 const maybeDM = require("../../../utils/maybeDM")
 
-const buildNeutralNotice = ({ sourceId, targetId }) => ({
+const buildNeutralNotice = ({ shieldEnabled = false, sourceId, targetId }) => ({
   content: "Interaction patterns from this account show elevated risk signals. No action has been taken. You may enable optional protections below.",
   components: [
     new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`sim:shield:${sourceId}:${targetId}`).setLabel("Enable interaction shield").setStyle(ButtonStyle.Primary),
-      new ButtonBuilder().setCustomId(`sim:delay:${sourceId}:${targetId}`).setLabel("Enable message delay").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`sim:links:${sourceId}:${targetId}`).setLabel("Enable link filtering").setStyle(ButtonStyle.Secondary)
-    ),
-    new ActionRowBuilder().addComponents(
-      new ButtonBuilder().setCustomId(`sim:evidence:${sourceId}:${targetId}`).setLabel("Open evidence vault").setStyle(ButtonStyle.Secondary),
-      new ButtonBuilder().setCustomId(`sim:report:${sourceId}:${targetId}`).setLabel("Silent report").setStyle(ButtonStyle.Danger)
+      new ButtonBuilder()
+        .setCustomId(`sim:shield:${sourceId}:${targetId}`)
+        .setLabel(shieldEnabled ? "Disable interaction shield" : "Enable interaction shield")
+        .setStyle(shieldEnabled ? ButtonStyle.Danger : ButtonStyle.Primary),
+      new ButtonBuilder()
+        .setCustomId(`sim:report:${sourceId}:${targetId}`)
+        .setLabel("Silent report")
+        .setStyle(ButtonStyle.Danger)
     )
   ]
 })
@@ -66,7 +67,11 @@ const triggerVictimProtection = async ({
   if (shouldContactVictim) {
     console.log("[SIM] Victim DM attempt", { guildId, sourceId, targetId, effectiveLevel })
     Promise.resolve(
-      maybeDM(guildId, victimUser, buildNeutralNotice({ sourceId, targetId }))
+      maybeDM(guildId, victimUser, buildNeutralNotice({
+        sourceId,
+        targetId,
+        shieldEnabled: Boolean(existing?.restrictDMs)
+      }))
     ).then(() => {
       console.log("[SIM] Victim DM success", { guildId, sourceId, targetId, effectiveLevel })
     }).catch(error => {
@@ -91,5 +96,6 @@ const triggerVictimProtection = async ({
 }
 
 module.exports = {
+  buildNeutralNotice,
   triggerVictimProtection
 }

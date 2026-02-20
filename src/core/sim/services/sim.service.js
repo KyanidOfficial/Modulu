@@ -5,7 +5,7 @@ const { scoreMessageRisk } = require("../engines/riskTensor.engine")
 const { scoreIntent } = require("../engines/intentInference.engine")
 const { updateDirectedRisk } = require("../models/directedRiskMatrix")
 const { updateGraphFromMessage, detectClusterAsync } = require("../engines/graphIntelligence.engine")
-const { triggerVictimProtection } = require("./victimProtection.service")
+const { buildNeutralNotice, triggerVictimProtection } = require("./victimProtection.service")
 const { appendEvidence, exportEvidence } = require("./evidenceIntegrity.service")
 const { interventionLevel, handleAssessment } = require("./enforcementOrchestrator.service")
 const { clamp01 } = require("../models/userRiskState")
@@ -117,24 +117,28 @@ class SimService {
     }
 
     let message = "No action applied."
+    let shieldEnabled = Boolean(existing.restrictDMs)
+
     if (action === "shield") {
-      next.restrictDMs = true
-      message = "Interaction shield enabled."
-    } else if (action === "delay") {
-      next.messageDelayMs = Math.max(Number(next.messageDelayMs || 0), 4000)
-      message = `Message delay enabled (${next.messageDelayMs}ms).`
-    } else if (action === "links") {
-      next.filterLinks = true
-      message = "Link filtering enabled."
-    } else if (action === "evidence") {
-      message = `Evidence key: ${sourceId}->${targetId}`
+      shieldEnabled = !Boolean(existing.restrictDMs)
+      next.restrictDMs = shieldEnabled
+      message = shieldEnabled ? "Interaction shield enabled." : "Interaction shield disabled."
     } else if (action === "report") {
       next.forceModeratedChannel = true
       message = "Silent report signal submitted."
     }
 
     this.store.interactionPolicies.set(key, next)
-    return { handled: true, message }
+
+    return {
+      handled: true,
+      message,
+      action,
+      sourceId,
+      targetId,
+      shieldEnabled,
+      notice: buildNeutralNotice({ shieldEnabled, sourceId, targetId })
+    }
   }
 
   applyGroomingSequenceStacking({ guildId, userId, targetId, now = Date.now(), state, content }) {

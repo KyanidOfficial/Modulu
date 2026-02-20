@@ -78,6 +78,34 @@ module.exports = async (client, interaction) => {
           actorUserId: interaction.user?.id
         }) || { handled: false, message: "SIM service unavailable." }
 
+        if (interaction.customId?.startsWith("sim:shield:")) {
+          if (result?.notice && interaction.message?.editable) {
+            await interaction.message.edit(result.notice).catch(() => {})
+          }
+
+          if (result?.shieldEnabled) {
+            console.log("[SIM] Shield enabled", {
+              sourceId: result?.sourceId,
+              targetId: result?.targetId,
+              userId: interaction.user?.id
+            })
+          } else {
+            console.log("[SIM] Shield disabled", {
+              sourceId: result?.sourceId,
+              targetId: result?.targetId,
+              userId: interaction.user?.id
+            })
+          }
+
+          console.log("[SIM] Button action executed", {
+            customId: interaction.customId,
+            userId: interaction.user?.id,
+            handled: !!result?.handled,
+            message: result?.message || null
+          })
+          return
+        }
+
         console.log("[SIM] Button action executed", {
           customId: interaction.customId,
           userId: interaction.user?.id,
