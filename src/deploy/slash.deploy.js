@@ -7,11 +7,6 @@ const { isCommandEnabled } = require("../utils/commandToggle")
 if (!process.env.TOKEN) throw new Error("Missing TOKEN")
 if (!process.env.CLIENT_ID) throw new Error("Missing CLIENT_ID")
 
-const useGuildDeploy = process.env.USE_GUILD_DEPLOY === "true"
-if (useGuildDeploy && !process.env.GUILD_ID) {
-  throw new Error("Missing GUILD_ID for USE_GUILD_DEPLOY=true")
-}
-
 const commands = []
 const names = new Set()
 const base = path.join(__dirname, "../commands")
@@ -28,6 +23,7 @@ const loadCommands = () => {
       const slashPath = path.join(cmdPath, "slash.js")
       if (!fs.existsSync(slashPath)) continue
 
+      delete require.cache[require.resolve(slashPath)]
       const file = require(slashPath)
 
       if (!file.data || !file.data.name) {
@@ -57,20 +53,23 @@ const rest = new REST({ version: "10" }).setToken(process.env.TOKEN)
 
     const payload = JSON.stringify(commands)
     const payloadSize = Buffer.byteLength(payload)
-    const route = useGuildDeploy
-      ? Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID)
-      : Routes.applicationCommands(process.env.CLIENT_ID)
 
     console.log("Deploying", commands.length, "commands")
-    console.log("Deploy route:", route)
     console.log("Payload size:", payloadSize)
+    console.time("GLOBAL_DEPLOY")
 
-    await rest.put(route, { body: commands })
+    await rest.put(
+      Routes.applicationCommands(process.env.CLIENT_ID),
+      { body: commands }
+    )
 
+    console.timeEnd("GLOBAL_DEPLOY")
     console.log("Global deploy successful")
+
+    process.exit(0)
   } catch (err) {
     console.error("Deploy failed")
     console.error(err)
-    process.exitCode = 1
+    process.exit(1)
   }
 })()

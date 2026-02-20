@@ -9,10 +9,12 @@ async function run() {
   try {
     console.log("Deleting all global slash commands...")
 
+    console.time("CLEAR")    
     await rest.put(
       Routes.applicationCommands(process.env.CLIENT_ID),
       { body: [] }
     )
+    console.timeEnd("CLEAR")
 
     console.log("All global slash commands deleted.")
   } catch (err) {
