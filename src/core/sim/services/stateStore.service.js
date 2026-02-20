@@ -16,6 +16,7 @@ class SimStateStore {
     this.channelAlertState = new Map()
     this.groomingSequenceByPair = new Map()
     this.lastDirectedInteraction = new Map()
+    this.activeAggressors = new Map()
   }
 
   getUserState(guildId, userId) {
@@ -74,6 +75,12 @@ class SimStateStore {
     for (const [sourceUserId, interaction] of this.lastDirectedInteraction.entries()) {
       if (now - (interaction?.timestamp || 0) > 10 * 60 * 1000) {
         this.lastDirectedInteraction.delete(sourceUserId)
+      }
+    }
+
+    for (const [pairKey, lock] of this.activeAggressors.entries()) {
+      if (!lock?.expiresAt || now >= lock.expiresAt) {
+        this.activeAggressors.delete(pairKey)
       }
     }
   }

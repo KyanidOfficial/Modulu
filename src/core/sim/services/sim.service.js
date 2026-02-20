@@ -245,6 +245,22 @@ class SimService {
     return { targetId: null, reason: "none" }
   }
 
+  createAggressorLock({ sourceUserId, targetUserId, now = Date.now() }) {
+    if (!sourceUserId || !targetUserId || sourceUserId === targetUserId) return
+
+    const pairKey = `${sourceUserId}->${targetUserId}`
+    this.store.activeAggressors.set(pairKey, {
+      aggressorId: sourceUserId,
+      victimId: targetUserId,
+      expiresAt: now + (10 * 60 * 1000)
+    })
+
+    console.log("[SIM] Aggressor lock created", {
+      aggressorId: sourceUserId,
+      victimId: targetUserId
+    })
+  }
+
   async sendSimAlertMessage({ channel, sourceUserId, targetUserId, globalRisk, directedSeverity, maxIntent, rawLevel, effectiveLevel, actionTaken }) {
     if (!channel?.isTextBased?.() || typeof channel.send !== "function") return
 
@@ -500,6 +516,30 @@ class SimService {
       })
     }
 
+    let victimReplyLockActive = false
+    if (targetUserId) {
+      const reverseKey = `${targetUserId}->${sourceUserId}`
+      const reverseLock = this.store.activeAggressors.get(reverseKey)
+      if (reverseLock) {
+        if (Date.now() >= reverseLock.expiresAt) {
+          this.store.activeAggressors.delete(reverseKey)
+          console.log("[SIM] Lock expired", {
+            aggressorId: reverseLock.aggressorId,
+            victimId: reverseLock.victimId
+          })
+        } else {
+          console.log("[SIM] Aggressor lock active", {
+            aggressorId: reverseLock.aggressorId,
+            victimId: reverseLock.victimId
+          })
+          if (sourceUserId !== reverseLock.aggressorId) {
+            victimReplyLockActive = true
+            console.log("[SIM] Victim reply detected. Grooming scoring skipped.")
+          }
+        }
+      }
+    }
+
     const accountAgeDays = (Date.now() - message.author.createdTimestamp) / (1000 * 60 * 60 * 24)
     const serverTenureDays = message.member?.joinedTimestamp
       ? (Date.now() - message.member.joinedTimestamp) / (1000 * 60 * 60 * 24)
@@ -509,18 +549,28 @@ class SimService {
     scoreMessageRisk({ state, message, accountAgeDays, serverTenureDays })
 
     const grooming = this.analyzeGroomingSignals(message.content)
-    if (grooming.increment > 0) {
+
+    if (!victimReplyLockActive && grooming.increment > 0) {
       state.dimensions.groomingProbability = clamp01(state.dimensions.groomingProbability + grooming.increment)
+      console.log("[SIM] Grooming scoring applied to aggressor", {
+        sourceUserId,
+        targetUserId,
+        increment: grooming.increment
+      })
     }
 
-    this.applyGroomingSequenceStacking({
-      guildId,
-      sourceUserId,
-      targetUserId,
-      now: message.createdTimestamp || Date.now(),
-      state,
-      signalCount: grooming.matched.length
-    })
+    if (victimReplyLockActive) {
+      state.dimensions.groomingProbability = previousGrooming
+    } else {
+      this.applyGroomingSequenceStacking({
+        guildId,
+        sourceUserId,
+        targetUserId,
+        now: message.createdTimestamp || Date.now(),
+        state,
+        signalCount: grooming.matched.length
+      })
+    }
 
     debugLog("risk.dimension.update", {
       guildId,
@@ -533,7 +583,10 @@ class SimService {
 
     const matrix = this.store.getDirectedMatrix(guildId)
 
-    if (this.config.featureFlags.directedModeling && targetUserId) {
+    if (this.config.featureFlags.directedModeling && targetUserId && !victimReplyLockActive) {
+      const pairKey = `${sourceUserId}->${targetUserId}`
+      const previousDirectedSeverity = normalizeDirectedRisk(matrix.get(pairKey) || null)
+
       let directedGrooming = state.dimensions.groomingProbability
 
       if (state.dimensions.groomingProbability > 0.05) {
@@ -553,11 +606,17 @@ class SimService {
         lastInteraction: Date.now()
       })
 
+      const directedSeverity = normalizeDirectedRisk(directed)
+
       console.log("[SIM] Directed severity updated", {
         sourceUserId,
         targetUserId,
-        directedSeverity: normalizeDirectedRisk(directed)
+        directedSeverity
       })
+
+      if (grooming.increment > 0.03 || directedSeverity > previousDirectedSeverity) {
+        this.createAggressorLock({ sourceUserId, targetUserId, now: Date.now() })
+      }
 
       debugLog("directed.update", {
         guildId,
