@@ -25,12 +25,13 @@ const handleDirectedEnforcement = async ({ context, effectiveLevel, thresholds, 
   const crossedProtectionEarly = directedSeverity >= thresholds.protectionEarly
 
   let protectionSatisfied = false
+  const actionsTaken = []
 
-  // Rule 1: Early warning protection can trigger at level 1, never at level 0 (unless intent-critical failsafe)
   if ((effectiveLevel >= 1 && crossedProtectionEarly) || intentCriticalBreach) {
     const result = await actions.triggerVictimProtection?.({ guildId, sourceUserId: userId, targetUserId: targetId, severity: directedSeverity, intentConfidence, effectiveLevel, force: intentCriticalBreach })
     protectionSatisfied = true
     if (result?.triggered) {
+      actionsTaken.push("Victim Protection")
       console.log("PROTECTION TRIGGERED", {
         sourceUserId: userId,
         targetUserId: targetId,
@@ -40,11 +41,11 @@ const handleDirectedEnforcement = async ({ context, effectiveLevel, thresholds, 
     }
   }
 
-  // Rule 2: Level 2 must ensure victim protection has executed
   if (effectiveLevel >= 2 && !protectionSatisfied) {
     const result = await actions.triggerVictimProtection?.({ guildId, sourceUserId: userId, targetUserId: targetId, severity: directedSeverity, intentConfidence, force: true, effectiveLevel })
     protectionSatisfied = true
     if (result?.triggered) {
+      actionsTaken.push("Victim Protection")
       console.log("PROTECTION TRIGGERED", {
         sourceUserId: userId,
         targetUserId: targetId,
@@ -54,23 +55,24 @@ const handleDirectedEnforcement = async ({ context, effectiveLevel, thresholds, 
     }
   }
 
-  // Failsafe: intentCritical alerts moderators regardless of cap.
   if (intentCriticalBreach) {
     await actions.notifyModerators?.({ guildId, sourceUserId: userId, targetUserId: targetId, directedSeverity, intentConfidence, critical: true })
+    actionsTaken.push("Critical Moderator Alert")
   }
 
-  // Rule 3
   if (effectiveLevel >= 3) {
     await actions.notifyModerators?.({ guildId, sourceUserId: userId, targetUserId: targetId, directedSeverity, intentConfidence })
+    actionsTaken.push("Moderator Alert")
   }
 
-  // Rule 4
   if (effectiveLevel >= 4) {
     await actions.formalModerationAction?.({ guildId, sourceUserId: userId, targetUserId: targetId, directedSeverity, intentConfidence })
+    actionsTaken.push("Formal Moderation Action")
   }
 
-  // If enforcement is globally disabled, do nothing (strict level rules) unless intentCritical already handled above.
-  if (maxEnforcementLevel === 0 && !intentCriticalBreach) return
+  if (maxEnforcementLevel === 0 && !intentCriticalBreach) return { actionTaken: "None" }
+
+  return { actionTaken: actionsTaken.length ? actionsTaken.join(" + ") : "None" }
 }
 
 const handleGlobalEnforcement = async ({ context, effectiveLevel, actions }) => {
@@ -82,7 +84,11 @@ const handleGlobalEnforcement = async ({ context, effectiveLevel, actions }) => 
       directedSeverity: 0,
       intentConfidence: context.intentConfidence
     })
+
+    return { actionTaken: "Formal Moderation Action" }
   }
+
+  return { actionTaken: "None" }
 }
 
 const handleAssessment = async ({ context, level, effectiveLevel, thresholds, maxEnforcementLevel, actions = {} }) => {
@@ -93,10 +99,10 @@ const handleAssessment = async ({ context, level, effectiveLevel, thresholds, ma
   })
 
   if (context.targetId) {
-    await handleDirectedEnforcement({ context, effectiveLevel, thresholds, maxEnforcementLevel, actions })
-  } else {
-    await handleGlobalEnforcement({ context, effectiveLevel, actions })
+    return handleDirectedEnforcement({ context, effectiveLevel, thresholds, maxEnforcementLevel, actions })
   }
+
+  return handleGlobalEnforcement({ context, effectiveLevel, actions })
 }
 
 module.exports = {
