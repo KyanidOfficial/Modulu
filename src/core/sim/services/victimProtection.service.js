@@ -44,14 +44,18 @@ const triggerVictimProtection = async ({
   const existing = store.interactionPolicies.get(key) || null
   const lastProtectionTimestamp = existing?.lastProtectionTimestamp || 0
   const now = Date.now()
+  const firstDetection = !lastProtectionTimestamp
+  const forceImmediateByLevel = Number(effectiveLevel || 0) >= 3 && Boolean(targetId)
   const cooldownActive = now - lastProtectionTimestamp < cooldownMs
-  const shouldContactVictim = force ? true : !cooldownActive
+  const shouldContactVictim = force || firstDetection || forceImmediateByLevel ? true : !cooldownActive
 
   console.log("[SIM] Protection decision", {
     shouldContactVictim,
     victimResolved: !!victimUser,
     cooldownActive,
-    force
+    force,
+    firstDetection,
+    effectiveLevel
   })
 
   if (!victimUser) {
@@ -60,11 +64,12 @@ const triggerVictimProtection = async ({
   }
 
   if (shouldContactVictim) {
+    console.log("[SIM] Victim DM attempt", { guildId, sourceId, targetId, effectiveLevel })
     try {
       await maybeDM(guildId, victimUser, buildNeutralNotice())
-      console.log("[SIM] Victim DM sent", { guildId, sourceId, targetId })
+      console.log("[SIM] Victim DM success", { guildId, sourceId, targetId, effectiveLevel })
     } catch (error) {
-      console.error("[SIM] Victim DM failed", { guildId, sourceId, targetId, error: error?.message })
+      console.error("[SIM] Victim DM failed", { guildId, sourceId, targetId, error: error?.message, effectiveLevel })
       return { triggered: false, reason: "dm_failed", lastProtectionTimestamp }
     }
   }

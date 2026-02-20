@@ -12,6 +12,7 @@ class SimStateStore {
     this.intentByPair = new Map()
     this.interactionPolicies = new Map()
     this.evidenceSessions = new Map()
+    this.enforcementEscalations = new Map()
   }
 
   getUserState(guildId, userId) {
@@ -43,6 +44,12 @@ class SimStateStore {
     for (const [sessionId, session] of this.evidenceSessions.entries()) {
       if (now - session.updatedAt > this.config.evidenceRetentionMs) {
         this.evidenceSessions.delete(sessionId)
+      }
+    }
+
+    for (const [pairKey, escalation] of this.enforcementEscalations.entries()) {
+      if (now - (escalation.lastDetectionAt || 0) > ttl) {
+        this.enforcementEscalations.delete(pairKey)
       }
     }
   }

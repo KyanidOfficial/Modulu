@@ -23,7 +23,56 @@ class SimService {
     setInterval(() => this.store.gc(), 60 * 1000).unref()
   }
 
-  async evaluateAssessment({ guildId, userId, targetId = null, victimUser = null, client = null, content = "", channelId = null, createdAt = Date.now() }) {
+  applyPairEscalation({ guildId, userId, targetId, effectiveLevel }) {
+    if (!targetId) return effectiveLevel
+
+    const now = Date.now()
+    const pairKey = `${guildId}:${userId}->${targetId}`
+    const existing = this.store.enforcementEscalations.get(pairKey) || { bump: 0, lastDetectionAt: 0 }
+    const repeatedWithinWindow = now - (existing.lastDetectionAt || 0) <= 10 * 60 * 1000
+
+    let bump = existing.bump || 0
+    if (repeatedWithinWindow) {
+      bump = Math.min(4, bump + 1)
+      console.log(`[SIM] Escalation applied newLevel=${Math.min(4, effectiveLevel + bump)}`)
+    }
+
+    this.store.enforcementEscalations.set(pairKey, {
+      bump,
+      lastDetectionAt: now
+    })
+
+    return Math.min(4, effectiveLevel + bump)
+  }
+
+  async sendSimAlertMessage({ channel, sourceUserId, targetUserId, globalRisk, directedSeverity, clusterRisk, maxIntent, rawLevel, effectiveLevel, actionTaken }) {
+    if (!channel?.isTextBased?.() || typeof channel.send !== "function") return
+
+    const lines = [
+      "**SIM Alert**",
+      `Source: <@${sourceUserId}>`,
+      targetUserId ? `Target: <@${targetUserId}>` : "Target: N/A",
+      `GlobalRisk: ${Number(globalRisk || 0).toFixed(3)}`,
+      `DirectedSeverity: ${Number(directedSeverity || 0).toFixed(3)}`,
+      `ClusterRisk: ${Number(clusterRisk || 0).toFixed(3)}`,
+      `MaxIntent: ${Number(maxIntent || 0).toFixed(3)}`,
+      `RawLevel: ${rawLevel}`,
+      `EffectiveLevel: ${effectiveLevel}`,
+      `Action: ${actionTaken || "None"}`,
+      `Timestamp: ${new Date().toISOString()}`
+    ]
+
+    Promise.resolve(
+      channel.send({ content: lines.join("\n") })
+    ).catch(error => {
+      console.error("[SIM] Failed to send in-channel alert", {
+        channelId: channel?.id,
+        error: error?.message
+      })
+    })
+  }
+
+  async evaluateAssessment({ guildId, userId, targetId = null, victimUser = null, client = null, content = "", channelId = null, channel = null, createdAt = Date.now() }) {
     const state = this.store.getUserState(guildId, userId)
     const intent = scoreIntent({
       templates: this.templates,
@@ -54,13 +103,6 @@ class SimService {
     const directedSeverity = normalizeDirectedRisk(directed)
     const maxIntent = Math.max(...Object.values(intent || {}).map(v => v.confidence || 0), 0)
 
-    console.log("INTERVENTION INPUTS", {
-      globalRisk,
-      directedSeverity,
-      clusterRisk: cluster.clusterCoefficient,
-      maxIntent
-    })
-
     const rawLevel = interventionLevel({
       globalRisk,
       directedRisk: directedSeverity,
@@ -76,9 +118,27 @@ class SimService {
         ? Math.max(baseEnforcementLevel, 3)
         : baseEnforcementLevel
 
-    const level = Math.min(rawLevel, dynamicCap)
+    let level = Math.min(rawLevel, dynamicCap)
+    level = this.applyPairEscalation({ guildId, userId, targetId, effectiveLevel: level })
     this.store.intentByUser.set(`${guildId}:${userId}`, intent)
     if (targetId) this.store.intentByPair.set(`${guildId}:${userId}->${targetId}`, intent)
+
+    if (this.config.debug || process.env.SIM_DEBUG_VERBOSE === "true") {
+      console.log("[SIM] Verbose assessment", {
+        guildId,
+        sourceUserId: userId,
+        targetUserId: targetId,
+        globalRisk,
+        directedSeverity,
+        clusterRisk: cluster.clusterCoefficient,
+        maxIntent,
+        rawLevel,
+        effectiveLevel: level,
+        dynamicCap,
+        velocity: state.metadata.velocity,
+        acceleration: state.metadata.acceleration
+      })
+    }
 
     debugLog("assessment.updated", {
       guildId,
@@ -92,9 +152,10 @@ class SimService {
       acceleration: state.metadata.acceleration
     })
 
+    let actionTaken = "None"
 
     try {
-      await handleAssessment({
+      const result = await handleAssessment({
         context: {
           guildId,
           userId,
@@ -119,11 +180,6 @@ class SimService {
               return null
             })
 
-            console.log("[SIM] Victim fetch result", {
-              targetUserId,
-              resolved: !!resolvedVictimUser
-            })
-
             if (!resolvedVictimUser) return { triggered: false, reason: "victim_unresolved" }
 
             return triggerVictimProtection({
@@ -144,8 +200,25 @@ class SimService {
           formalModerationAction: payload => this.formalModerationAction(payload)
         }
       })
+
+      actionTaken = result?.actionTaken || "None"
     } catch (error) {
       console.error("[SIM] enforcement failed", error)
+    }
+
+    if (level >= 2) {
+      this.sendSimAlertMessage({
+        channel,
+        sourceUserId: userId,
+        targetUserId: targetId,
+        globalRisk,
+        directedSeverity,
+        clusterRisk: cluster.clusterCoefficient,
+        maxIntent,
+        rawLevel,
+        effectiveLevel: level,
+        actionTaken
+      })
     }
 
     if (level >= 3 && targetId && channelId) {
@@ -220,6 +293,7 @@ class SimService {
       client: message.client || null,
       content: message.content,
       channelId: message.channel?.id,
+      channel: message.channel || null,
       createdAt: message.createdTimestamp || Date.now()
     })
   }
