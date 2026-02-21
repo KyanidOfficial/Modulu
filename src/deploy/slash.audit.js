@@ -102,18 +102,18 @@ const validateOptionSet = ({ options, commandName, commandPath, errors }) => {
 
 const collectSlashFiles = base => {
   const files = []
-  for (const category of fs.readdirSync(base)) {
-    const categoryPath = path.join(base, category)
-    if (!fs.statSync(categoryPath).isDirectory()) continue
-
-    for (const folder of fs.readdirSync(categoryPath)) {
-      const folderPath = path.join(categoryPath, folder)
-      if (!fs.statSync(folderPath).isDirectory()) continue
-
-      const slashPath = path.join(folderPath, "slash.js")
-      if (fs.existsSync(slashPath)) files.push(slashPath)
+  const walk = dir => {
+    for (const entry of fs.readdirSync(dir)) {
+      const fullPath = path.join(dir, entry)
+      const stat = fs.statSync(fullPath)
+      if (stat.isDirectory()) {
+        walk(fullPath)
+        continue
+      }
+      if (entry === "slash.js") files.push(fullPath)
     }
   }
+  walk(base)
   return files
 }
 
