@@ -4,9 +4,9 @@ const dmUser = require("../../utils/dmUser")
 const activityEmbed = require("../../messages/embeds/staffTime.activityCheck.embed")
 const autoEmbed = require("../../messages/embeds/staffTime.autoClockout.embed")
 
-const CHECK_AFTER = 10 * 1000
-const AUTO_AFTER = 10 * 1000
-const LOOP_DELAY = 5 * 1000
+const CHECK_AFTER = 30 * 60 * 1000 // 30 minutes
+const AUTO_AFTER = 15 * 60 * 1000 // 15 minutes after warning
+const LOOP_DELAY = 60 * 1000 // 1 minute loop
 
 module.exports = client => {
   console.log("[STAFF TIME] loop started")
