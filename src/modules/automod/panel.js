@@ -7,8 +7,8 @@ const {
   ChannelType
 } = require("discord.js")
 const systemEmbed = require("../../messages/embeds/system.embed")
-const COLORS = require("../../utils/colors")
-const { escapeMarkdownSafe } = require("../../utils/safeText")
+const COLORS = require("../../shared/utils/colors")
+const { escapeMarkdownSafe } = require("../../shared/utils/safeText")
 
 const ruleLabelMap = {
   bannedWords: "Banned Words",

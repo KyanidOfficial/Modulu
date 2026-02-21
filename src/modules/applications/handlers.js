@@ -19,9 +19,9 @@ const {
   endSessionLock: endApplyLock
 } = require("./modalApply.store")
 const systemEmbed = require("../../messages/embeds/system.embed")
-const COLORS = require("../../utils/colors")
+const COLORS = require("../../shared/utils/colors")
 const { normalize, validateType, validateDescription } = require("./validators")
-const { escapeMarkdownSafe } = require("../../utils/safeText")
+const { escapeMarkdownSafe } = require("../../shared/utils/safeText")
 
 const APP_STATUS_LABELS = {
   pending: "Pending",

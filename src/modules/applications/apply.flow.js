@@ -7,7 +7,7 @@ const {
 
 const db = require("../../core/database/applications")
 const systemEmbed = require("../../messages/embeds/system.embed")
-const COLORS = require("../../utils/colors")
+const COLORS = require("../../shared/utils/colors")
 const { createSession, getSession } = require("./modalApply.store")
 
 const QUESTIONS_PER_MODAL = 5

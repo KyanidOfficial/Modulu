@@ -1,5 +1,5 @@
 const { ActionRowBuilder, ButtonBuilder, ButtonStyle } = require("discord.js")
-const maybeDM = require("../../../utils/maybeDM")
+const maybeDM = require("../../../shared/utils/maybeDM")
 
 const buildNeutralNotice = ({ shieldEnabled = false, sourceId, targetId }) => ({
   content: "Interaction patterns from this account show elevated risk signals. No action has been taken. You may enable optional protections below.",

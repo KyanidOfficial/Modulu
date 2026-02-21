@@ -11,9 +11,9 @@ const raidState = require("../../core/raid/raidState")
 
 const infoEmbed = require("../../messages/embeds/info.embed")
 const joinGateEmbed = require("../../messages/embeds/joinGate.embed")
-const logServerEvent = require("../../utils/logServerEvent")
+const logServerEvent = require("../../shared/utils/logServerEvent")
 const serverLogEmbed = require("../../messages/embeds/serverLog.embed")
-const dmUser = require("../../utils/dmUser")
+const dmUser = require("../../shared/utils/dmUser")
 
 module.exports = async (client, member) => {
   console.log("[JOIN] member joined", member.user.username)

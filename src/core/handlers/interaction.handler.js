@@ -12,11 +12,10 @@ const rejectEmbed = require("../../messages/embeds/joinGate.rejected.embed")
 const approveEmbed = require("../../messages/embeds/joinGate.approved.embed")
 const feedbackEmbed = require("../../messages/embeds/feedback.embed")
 const systemEmbed = require("../../messages/embeds/system.embed")
-const COLORS = require("../../utils/colors")
+const COLORS = require("../../shared/utils/colors")
 
 const staffTimeButtons = require("./staffTime.buttons")
 const handleApplications = require("../../modules/applications/handlers")
-const { requireEnabled } = require("../../utils/commandToggle")
 const handleAutomodPanel = require("../../modules/automod/panel.handlers")
 const { getSimService } = require("../sim")
 
@@ -343,38 +342,6 @@ module.exports = async (client, interaction) => {
 
     const command = client.commands.get(interaction.commandName)
     if (!command || typeof command.execute !== "function") return
-
-    const enabled = requireEnabled(command)
-    if (!enabled.ok) {
-      if (!interaction.deferred && !interaction.replied) {
-        await interaction.reply({
-          embeds: [systemEmbed({
-            title: "Command Disabled",
-            description: enabled.reason,
-            color: COLORS.warning
-          })],
-          ephemeral: true
-        }).catch(() => {})
-      } else {
-        await interaction.editReply({
-          embeds: [systemEmbed({
-            title: "Command Disabled",
-            description: enabled.reason,
-            color: COLORS.warning
-          })]
-        }).catch(() => {})
-      }
-      return
-    }
-
-    if (!command.skipDefer && !interaction.deferred && !interaction.replied) {
-      try {
-        await interaction.deferReply()
-      } catch (err) {
-        if (isIgnorableInteractionError(err)) return
-        throw err
-      }
-    }
 
     await command.execute(interaction)
 

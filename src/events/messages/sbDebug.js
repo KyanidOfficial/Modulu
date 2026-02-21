@@ -1,6 +1,6 @@
-const safeBrowsing = require("../../utils/safeBrowsing")
+const safeBrowsing = require("../../shared/utils/safeBrowsing")
 const systemEmbed = require("../../messages/embeds/system.embed")
-const COLORS = require("../../utils/colors")
+const COLORS = require("../../shared/utils/colors")
 
 module.exports = async message => {
   if (!message.content) return

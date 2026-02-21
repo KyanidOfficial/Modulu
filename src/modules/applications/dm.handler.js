@@ -1,7 +1,7 @@
 const db = require("../../core/database/applications")
 const systemEmbed = require("../../messages/embeds/system.embed")
 const applicationSubmittedEmbed = require("../../messages/embeds/application.submitted.embed")
-const COLORS = require("../../utils/colors")
+const COLORS = require("../../shared/utils/colors")
 const {
   getSession,
   touchSession,

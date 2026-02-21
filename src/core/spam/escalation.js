@@ -1,9 +1,9 @@
 const db = require("../database")
-const dmUser = require("../../utils/maybeDM")
+const dmUser = require("../../shared/utils/maybeDM")
 const dmEmbed = require("../../messages/embeds/dmPunishment.embed")
-const logAction = require("../../utils/logAction")
+const logAction = require("../../shared/utils/logAction")
 const logEmbed = require("../../messages/embeds/log.embed")
-const COLORS = require("../../utils/colors")
+const COLORS = require("../../shared/utils/colors")
 
 const actionCooldown = new Map()
 const COOLDOWN_MS = 10_000

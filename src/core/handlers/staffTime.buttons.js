@@ -1,6 +1,6 @@
 const staffDb = require("../database/staffTime")
-const dmUser = require("../../utils/dmUser")
-const format = require("../../utils/timeFormat")
+const dmUser = require("../../shared/utils/dmUser")
+const format = require("../../shared/utils/timeFormat")
 
 const clockOutEmbed = require("../../messages/embeds/staffTime.clockout.embed")
 
