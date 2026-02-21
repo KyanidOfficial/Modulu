@@ -125,6 +125,7 @@ module.exports = {
       embeds: [
         embed({
           users: user ? `<@${user.id}>` : `<#${channel.id}>`,
+          moderatorId: interaction.user.id,
           punishment: "purge",
           state: "completed",
           reason: `Deleted ${deletedCount} messages`,

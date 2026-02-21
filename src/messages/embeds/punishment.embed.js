@@ -6,11 +6,11 @@ module.exports = data => {
     .setTitle(`${data.punishment} ${data.state}`)
     .setColor(data.color || COLORS.success)
     .setDescription(
-      `> **User:** ${data.users || "Unknown"}` +
-      `> **Moderator:** ${data.moderator || "N/A"}` +
-      `> **Warning Count:** ${Number.isFinite(data.warningCount) ? data.warningCount : "N/A"}` +
-      `> **Expires at:** ${data.expiresAt ? `<t:${data.expiresAt}:F>` : "N/A"}` +
-      `> **Reason:** ${data.reason || "No reason provided"}`
+      `> **User:** ${data.users || "Unknown"}\n` +
+      `> **Moderator:** ${data.moderatorId ? `<@${data.moderatorId}>` : "N/A"}\n` +
+      `> **Warning Count:** ${Number.isFinite(data.warningCount) ? data.warningCount : "N/A"}\n` +
+      `> **Expires at:** ${data.expiresAt ? `<t:${data.expiresAt}:F>` : "N/A"}\n` +
+      `> **Reason:** ${data.reason || "No reason provided"}\n`
     )
     .setFooter({ text: `${data.footer || "Moderation Action"}` })
     .setTimestamp()

@@ -93,8 +93,7 @@ const buildSubmissionEmbed = submission => {
     description:
       `Applicant: **${safe(payload.applicant?.username || submission.userId)}** (${submission.userId})\n` +
       `Type: **${safe(submission.type || payload.type || "unknown")}**\n` +
-      `Status: **${APP_STATUS_LABELS[submission.status] || submission.status || "pending"}**\n` +
-      `Submitted: **${payload.submittedAt || "In progress"}**`,
+      `Status: **${APP_STATUS_LABELS[submission.status] || submission.status || "pending"}**\n`,
     color: COLORS.info
   })
 
@@ -112,7 +111,7 @@ const buildSubmissionEmbed = submission => {
       name: "Staff Notes",
       value: notes
         .slice(-5)
-        .map(note => `• <@${note.reviewerId}>: ${safe(note.note)}`)
+        .map(note => `> - <@${note.reviewerId}>: ${safe(note.note)}`)
         .join("\n")
         .slice(0, 1024),
       inline: false
@@ -156,14 +155,14 @@ const renderSubmissionList = async (interaction, page = 0) => {
 
   const description = currentItems
     .slice(0, 10)
-    .map(s => `• ${safe(s.payload?.applicant?.username || s.userId)} — ${APP_STATUS_LABELS[s.status] || s.status} — ${safe(s.payload?.submittedAt || "In progress")}`)
+    .map(s => `- ${safe(s.payload?.applicant?.username || s.userId)} — ${APP_STATUS_LABELS[s.status] || s.status}`)
     .join("\n")
 
   const components = []
 
   const options = currentItems.slice(0, 25).map(s => ({
     label: safe(s.payload?.applicant?.username || `User ${s.userId}`).slice(0, 100),
-    description: safe(`${s.type || "unknown"} • ${APP_STATUS_LABELS[s.status] || s.status}`).slice(0, 100),
+    description: safe(`${s.type || "unknown"} - ${APP_STATUS_LABELS[s.status] || s.status}`).slice(0, 100),
     value: String(s.id)
   }))
 
@@ -684,7 +683,7 @@ module.exports = async interaction => {
     const description = filtered
       .map(item => {
         const qCount = Array.isArray(item.config?.questions) ? item.config.questions.length : 0
-        return `• **${safe(item.type)}** — creator: <@${item.config?.creatorId || "unknown"}> — ${safe(item.config?.state || "unknown")} — ${qCount} question(s) — created ${safe(item.config?.createdAt || "unknown")}`
+        return `- **${safe(item.type)}** — creator: <@${item.config?.creatorId || "unknown"}> — ${safe(item.config?.state || "unknown")} — ${qCount} question(s) — created ${safe(item.config?.createdAt || "unknown")}`
       })
       .join("\n")
       .slice(0, 3900)

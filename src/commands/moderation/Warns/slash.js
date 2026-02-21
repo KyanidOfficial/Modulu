@@ -67,6 +67,7 @@ module.exports = {
       return interaction.editReply({
         embeds: [errorEmbed({
           users: `<@${user.id}>`,
+          moderatorId: interaction.user.id,
           punishment: "warns",
           state: "failed",
           reason: "Failed to fetch warnings from persistent storage",

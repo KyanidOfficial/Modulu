@@ -114,6 +114,7 @@ module.exports = {
       embeds: [
         embed({
           users: `<@${target.id}>`,
+          moderatorId: interaction.user.id,
           punishment: "kick",
           state: "applied",
           reason,

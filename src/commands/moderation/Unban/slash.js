@@ -100,6 +100,7 @@ module.exports = {
         embed({
           users: userId,
           punishment: "unban",
+          moderatorId: interaction.user.id,
           state: "removed",
           reason,
           color: COLORS.success

@@ -1,4 +1,4 @@
-const COMMAND_ENABLED = true
+const COMMAND_ENABLED = false
 const { SlashCommandBuilder, PermissionsBitField, ChannelType } = require("discord.js")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
@@ -124,6 +124,7 @@ module.exports = {
       embeds: [
         embed({
           users: targetChannel ? `<#${targetChannel.id}>` : "All text channels",
+          moderatorId: interaction.user.id,
           punishment: enabled ? "lockdown" : "unlockdown",
           state: "applied",
           reason: failures.length

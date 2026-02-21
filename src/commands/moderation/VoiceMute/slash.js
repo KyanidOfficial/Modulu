@@ -96,6 +96,7 @@ module.exports = {
         embed({
           users: `<@${target.id}>`,
           punishment: enabled ? "voicemute" : "voiceunmute",
+          moderatorId: interaction.user.id,
           state: "completed",
           reason,
           color: enabled ? COLORS.warning : COLORS.success

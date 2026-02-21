@@ -1,6 +1,7 @@
 module.exports = {
   category: "Moderation",
-  description: "Remove a manual mute from a user.",
-  usage: "unmute @user",
-  example: "unmute @NoisyUser"
+  description: "Remove a user's mute",
+  usage: "unmute <user>",
+  example: "unmute @user",
+  permissions: ["ModerateMembers"]
 }

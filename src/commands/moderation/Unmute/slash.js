@@ -6,77 +6,107 @@ const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
-const ensureRole = require("../../../utils/ensureRole")
 const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
   COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("unmute")
-    .setDescription("Remove a manual mute from a user")
+    .setDescription("Remove a mute")
     .addUserOption(o =>
       o.setName("user").setDescription("Target user").setRequired(true)
     ),
 
   async execute(interaction) {
     const guild = interaction.guild
-    if (!guild) return
+    if (!guild) {
+      throw new Error("No guild context")
+    }
 
+    const member = interaction.options.getMember("user")
     const executor = interaction.member
-    const botMember = guild.members.me
-    const target = interaction.options.getMember("user")
 
-    const replyError = text =>
-      interaction.editReply({
+    if (!member) {
+      return interaction.editReply({
         embeds: [
           errorEmbed({
-            users: target ? `<@${target.id}>` : "Unknown",
+            users: "Unknown user",
             punishment: "unmute",
             state: "failed",
-            reason: text,
+            reason: "Member not found",
             color: COLORS.error
           })
         ]
       })
+    }
 
     const access = await resolveModerationAccess({
       guildId: guild.id,
       member: executor,
       requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
     })
-
     if (!access.allowed) {
-      return replyError(access.reason)
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${interaction.user.id}>`,
+            punishment: "unmute",
+            state: "failed",
+            reason: access.reason,
+            color: COLORS.error
+          })
+        ]
+      })
     }
 
-    if (!botMember.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
-      return replyError("Bot lacks permissions")
+    if (!guild.members.me.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "unmute",
+            state: "failed",
+            reason: "Bot lacks permissions",
+            color: COLORS.error
+          })
+        ]
+      })
     }
 
-    if (!target) return replyError("Member not found")
-
-    const mutedRole = await ensureRole({
-      guild,
-      roleKey: "muted",
-      roleName: "Muted"
-    })
-
-    if (!mutedRole) return replyError("Muted role not found")
-
-    if (!target.roles.cache.has(mutedRole.id)) {
-      return replyError("User is not muted")
+    if (member.roles.highest.position >= executor.roles.highest.position) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "unmute",
+            state: "failed",
+            reason: "Role hierarchy issue",
+            color: COLORS.error
+          })
+        ]
+      })
     }
 
     try {
-      await target.roles.remove(mutedRole, "Manual unmute")
+      await member.timeout(null)
     } catch {
-      return replyError("Failed to remove muted role")
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "unmute",
+            state: "failed",
+            reason: "Failed to remove mute",
+            color: COLORS.error
+          })
+        ]
+      })
     }
 
     await logModerationAction({
       guild,
       action: "unmute",
-      userId: target.id,
+      userId: member.id,
       moderatorId: interaction.user.id,
       reason: "Manual removal",
       color: COLORS.success
@@ -84,20 +114,21 @@ module.exports = {
 
     await dmUser(
       guild.id,
-      target.user,
+      member.user,
       dmEmbed({
         punishment: "unmute",
         reason: "Manual removal",
         guild: guild.name,
-        color: COLORS.success
+        color: COLORS.warning
       })
     )
 
     return interaction.editReply({
       embeds: [
         embed({
-          users: `<@${target.id}>`,
+          users: `<@${member.id}>`,
           punishment: "unmute",
+          moderatorId: interaction.user.id,
           state: "removed",
           reason: "Manual removal",
           color: COLORS.success

@@ -106,6 +106,7 @@ module.exports = {
       return interaction.editReply({
         embeds: [errorEmbed({
           users: `<@${user.id}>`,
+          moderatorId: interaction.user.id,
           punishment: "unwarn",
           state: "failed",
           reason: "Failed to revoke warning from persistent storage",

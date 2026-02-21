@@ -111,6 +111,7 @@ module.exports = {
         embed({
           users: `<@${target.id}>`,
           punishment: "unquarantine",
+          moderatorId: interaction.user.id,
           state: "removed",
           reason: "Manual removal",
           color: COLORS.success

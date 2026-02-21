@@ -1,138 +1,200 @@
 const COMMAND_ENABLED = true
 const { SlashCommandBuilder, PermissionsBitField } = require("discord.js")
+const parse = require("../../../utils/time")
 const embed = require("../../../messages/embeds/punishment.embed")
 const errorEmbed = require("../../../messages/embeds/error.embed")
 const dmUser = require("../../../utils/maybeDM")
 const dmEmbed = require("../../../messages/embeds/dmPunishment.embed")
 const COLORS = require("../../../utils/colors")
 const logModerationAction = require("../../../utils/logModerationAction")
-const ensureRole = require("../../../utils/ensureRole")
 const { resolveModerationAccess } = require("../../../utils/permissionResolver")
 
 module.exports = {
   COMMAND_ENABLED,
   data: new SlashCommandBuilder()
     .setName("mute")
-    .setDescription("Manually mute a user using a muted role")
+    .setDescription("mute a user")
     .addUserOption(o =>
       o.setName("user").setDescription("Target user").setRequired(true)
     )
     .addStringOption(o =>
-      o.setName("reason").setDescription("Reason")
+      o.setName("time").setDescription("Duration").setRequired(true)
     )
-    .addBooleanOption(o =>
-      o.setName("dm").setDescription("Send DM to the user. Default true")
+    .addStringOption(o =>
+      o.setName("reason").setDescription("Reason")
     ),
 
   async execute(interaction) {
     const guild = interaction.guild
-    if (!guild) return
+    if (!guild) {
+      throw new Error("No guild context")
+    }
 
-    const executor = interaction.member
-    const botMember = guild.members.me
-    const target = interaction.options.getMember("user")
+    const member = interaction.options.getMember("user")
     const reason = interaction.options.getString("reason") || "No reason provided"
-    const sendDM = interaction.options.getBoolean("dm") !== false
+    const timeInput = interaction.options.getString("time")
 
-    const replyError = text =>
-      interaction.editReply({
+    if (!member) {
+      return interaction.editReply({
         embeds: [
           errorEmbed({
-            users: target ? `<@${target.id}>` : "Unknown",
+            users: "Unknown user",
             punishment: "mute",
             state: "failed",
-            reason: text,
+            reason: "Member not found",
             color: COLORS.error
           })
         ]
       })
+    }
+
+    const parsed = parse(timeInput)
+    if (!parsed || !parsed.ms) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "mute",
+            state: "failed",
+            reason: "Invalid time format",
+            color: COLORS.error
+          })
+        ]
+      })
+    }
+
+    const executor = interaction.member
 
     const access = await resolveModerationAccess({
       guildId: guild.id,
       member: executor,
       requiredDiscordPerms: [PermissionsBitField.Flags.ModerateMembers]
     })
-
     if (!access.allowed) {
-      return replyError(access.reason)
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${interaction.user.id}>`,
+            punishment: "mute",
+            state: "failed",
+            reason: access.reason,
+            color: COLORS.error
+          })
+        ]
+      })
     }
 
-    if (!botMember.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
-      return replyError("Bot lacks permissions")
+    if (!guild.members.me.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "mute",
+            state: "failed",
+            reason: "Bot lacks permissions",
+            color: COLORS.error
+          })
+        ]
+      })
     }
 
-    if (!target) return replyError("Member not found")
-
-    if (target.id === interaction.user.id) {
-      return replyError("You cannot mute yourself")
+    if (member.id === interaction.user.id) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "mute",
+            state: "failed",
+            reason: "You cannot mute yourself",
+            color: COLORS.error
+          })
+        ]
+      })
     }
 
-    if (target.id === botMember.id) {
-      return replyError("You cannot mute the bot")
+    if (member.id === guild.members.me.id) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "mute",
+            state: "failed",
+            reason: "You cannot mute the bot",
+            color: COLORS.error
+          })
+        ]
+      })
     }
 
-    if (target.roles.highest.position >= executor.roles.highest.position) {
-      return replyError("Role hierarchy issue")
+    if (member.roles.highest.position >= executor.roles.highest.position) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "mute",
+            state: "failed",
+            reason: "Role hierarchy issue",
+            color: COLORS.error
+          })
+        ]
+      })
     }
 
-    if (target.roles.highest.position >= botMember.roles.highest.position) {
-      return replyError("Target role is higher than bot role")
-    }
-
-    const mutedRole = await ensureRole({
-      guild,
-      roleKey: "muted",
-      roleName: "Muted",
-      overwrites: {
-        SendMessages: false,
-        AddReactions: false,
-        SendMessagesInThreads: false,
-        Speak: false,
-        Connect: false
-      }
-    })
-
-    if (!mutedRole) return replyError("Unable to set up muted role")
-
-    if (target.roles.cache.has(mutedRole.id)) {
-      return replyError("User is already muted")
+    if (member.isCommunicationDisabled()) {
+      return interaction.editReply({
+        embeds: [
+          errorEmbed({
+            users: `<@${member.id}>`,
+            punishment: "mute",
+            state: "failed",
+            reason: "User is already timed out",
+            color: COLORS.error
+          })
+        ]
+      })
     }
 
     try {
-      await target.roles.add(mutedRole, reason)
-    } catch {
-      return replyError("Failed to apply muted role")
+      await member.timeout(parsed.ms, reason)
+    } catch (err) {
+      throw err
     }
+
+    const expiresAt = Math.floor((Date.now() + parsed.ms) / 1000)
 
     await logModerationAction({
       guild,
       action: "mute",
-      userId: target.id,
+      userId: member.id,
       moderatorId: interaction.user.id,
       reason,
+      duration: parsed.label,
+      expiresAt,
       color: COLORS.warning
     })
 
-    if (sendDM) {
-      await dmUser(
-        guild.id,
-        target.user,
-        dmEmbed({
-          punishment: "mute",
-          reason,
-          guild: guild.name,
-          color: COLORS.warning
-        })
-      )
-    }
+    await dmUser(
+      guild.id,
+      member.user,
+      dmEmbed({
+        punishment: "mute",
+        expiresAt,
+        reason,
+        guild: guild.name,
+        color: COLORS.warning
+      })
+    )
 
     return interaction.editReply({
       embeds: [
         embed({
-          users: `<@${target.id}>`,
+          users: `<@${member.id}>`,
           punishment: "mute",
           state: "applied",
+          moderatorId: interaction.user.id,
           reason,
+          duration: parsed.label,
+          expiresAt,
           color: COLORS.success
         })
       ]

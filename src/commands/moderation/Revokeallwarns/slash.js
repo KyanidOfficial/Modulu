@@ -72,6 +72,7 @@ module.exports = {
         embeds: [errorEmbed({
           users: `<@${user.id}>`,
           punishment: "clearallwarns",
+          moderatorId: interaction.user.id,
           state: "failed",
           reason: "Failed to clear warnings from persistent storage",
           moderator: `<@${interaction.user.id}>`,
