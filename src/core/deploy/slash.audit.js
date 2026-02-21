@@ -1,5 +1,6 @@
 const fs = require("fs")
 const path = require("path")
+const { SlashCommandBuilder } = require("discord.js")
 const NAME_REGEX = /^[a-z0-9_-]{1,32}$/
 const MAX_DESCRIPTION_LENGTH = 100
 const MAX_OPTIONS = 25
@@ -148,6 +149,7 @@ const auditSlashModules = ({ basePath, includeDisabled = false, isCommandEnabled
       continue
     }
 
+<<<<<<< HEAD
     if (!moduleExports.data || typeof moduleExports.data.toJSON !== "function") {
       pushError(errors, `[DATA] ${filePath} data must provide toJSON()`)
       invalidFiles.push(filePath)
