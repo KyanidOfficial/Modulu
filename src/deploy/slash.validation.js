@@ -3,6 +3,7 @@ const MAX_NAME_LENGTH = 32
 const MAX_DESCRIPTION_LENGTH = 100
 const MAX_OPTIONS = 25
 const MAX_CHOICES = 25
+const NAME_REGEX = /^[a-z0-9_-]{1,32}$/
 
 const isNonEmptyString = value => typeof value === "string" && value.trim().length > 0
 
@@ -10,10 +11,35 @@ const pushError = (errors, message) => {
   errors.push(message)
 }
 
-const validateChoices = ({ commandName, optionPath, choices, errors }) => {
+const validateChoices = ({ commandName, optionName, choices, errors }) => {
   if (!Array.isArray(choices)) return
+
   if (choices.length > MAX_CHOICES) {
-    pushError(errors, `[${commandName}] ${optionPath} has ${choices.length} choices (max ${MAX_CHOICES})`)
+    pushError(errors, `[${commandName}] option ${optionName} has ${choices.length} choices (max ${MAX_CHOICES})`)
+  }
+
+  const seenNames = new Set()
+  const seenValues = new Set()
+
+  for (const choice of choices) {
+    if (!isNonEmptyString(choice?.name)) {
+      pushError(errors, `[${commandName}] option ${optionName} has a choice without a valid name`)
+      continue
+    }
+
+    if (seenNames.has(choice.name)) {
+      pushError(errors, `[${commandName}] option ${optionName} has duplicate choice name ${choice.name}`)
+    }
+    seenNames.add(choice.name)
+
+    if (seenValues.has(choice.value)) {
+      pushError(errors, `[${commandName}] option ${optionName} has duplicate choice value ${choice.value}`)
+    }
+    seenValues.add(choice.value)
+
+    if (String(choice.value).length > 100) {
+      pushError(errors, `[${commandName}] option ${optionName} has choice value longer than 100 characters`)
+    }
   }
 }
 
@@ -24,13 +50,32 @@ const validateOptions = ({ commandName, options, path = "options", errors }) => 
     pushError(errors, `[${commandName}] ${path} has ${options.length} entries (max ${MAX_OPTIONS})`)
   }
 
+  const seenNames = new Set()
+  let optionalSeen = false
+
   for (const option of options) {
     const optionName = option?.name || "<unnamed>"
     const optionPath = `${path}.${optionName}`
 
     if (!isNonEmptyString(option?.name)) {
       pushError(errors, `[${commandName}] ${optionPath} is missing a valid name`)
-    } else if (option.name.length > MAX_NAME_LENGTH) {
+      continue
+    }
+
+    if (!NAME_REGEX.test(option.name)) {
+      pushError(errors, `[${commandName}] ${optionPath} has an invalid option name`)
+    }
+
+    if (seenNames.has(option.name)) {
+      pushError(errors, `[${commandName}] ${path} has duplicate option name ${option.name}`)
+    }
+    seenNames.add(option.name)
+
+    if (option.name === commandName) {
+      pushError(errors, `[${commandName}] ${optionPath} cannot match command name`)
+    }
+
+    if (option.name.length > MAX_NAME_LENGTH) {
       pushError(errors, `[${commandName}] ${optionPath} name exceeds ${MAX_NAME_LENGTH} chars`)
     }
 
@@ -40,7 +85,15 @@ const validateOptions = ({ commandName, options, path = "options", errors }) => 
       pushError(errors, `[${commandName}] ${optionPath} description exceeds ${MAX_DESCRIPTION_LENGTH} chars`)
     }
 
-    validateChoices({ commandName, optionPath, choices: option?.choices, errors })
+    if (option.required) {
+      if (optionalSeen) {
+        pushError(errors, `[${commandName}] ${optionPath} is required but appears after optional options`)
+      }
+    } else {
+      optionalSeen = true
+    }
+
+    validateChoices({ commandName, optionName: option.name, choices: option?.choices, errors })
     validateOptions({ commandName, options: option?.options, path: `${optionPath}.options`, errors })
   }
 }
@@ -64,6 +117,10 @@ const validateCommandPayload = commands => {
     if (!isNonEmptyString(name)) {
       pushError(errors, "Command is missing a valid name")
       continue
+    }
+
+    if (!NAME_REGEX.test(name)) {
+      pushError(errors, `[${name}] command name is invalid`)
     }
 
     if (seen.has(name)) {
