@@ -1,10 +1,6 @@
 const fs = require("fs")
 const path = require("path")
-<<<<<<< HEAD:src/core/deploy/slash.audit.js
-=======
 const { SlashCommandBuilder } = require("discord.js")
-
->>>>>>> main:src/deploy/slash.audit.js
 const NAME_REGEX = /^[a-z0-9_-]{1,32}$/
 const MAX_DESCRIPTION_LENGTH = 100
 const MAX_OPTIONS = 25
@@ -153,13 +149,9 @@ const auditSlashModules = ({ basePath, includeDisabled = false, isCommandEnabled
       continue
     }
 
-<<<<<<< HEAD:src/core/deploy/slash.audit.js
+<<<<<<< HEAD
     if (!moduleExports.data || typeof moduleExports.data.toJSON !== "function") {
       pushError(errors, `[DATA] ${filePath} data must provide toJSON()`)
-=======
-    if (!(moduleExports.data instanceof SlashCommandBuilder)) {
-      pushError(errors, `[DATA] ${filePath} data must be an instance of SlashCommandBuilder`)
->>>>>>> main:src/deploy/slash.audit.js
       invalidFiles.push(filePath)
       continue
     }

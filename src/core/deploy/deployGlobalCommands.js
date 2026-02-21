@@ -1,7 +1,6 @@
 require("dotenv").config()
 const path = require("path")
 const { REST, Routes } = require("discord.js")
-<<<<<<< HEAD
 const { isCommandEnabled } = require("../../shared/utils/commandToggle")
 const { validateCommandPayload } = require("./slash.validation")
 const { auditSlashModules } = require("./slash.audit")
@@ -9,15 +8,6 @@ const thresholds = require("../../config/thresholds")
 
 const validateOnly = process.env.DEPLOY_VALIDATE_ONLY === "true"
 const basePath = path.join(__dirname, "..", "..", "commands", "global")
-=======
-const { isCommandEnabled } = require("../../utils/commandToggle")
-const { validateCommandPayload } = require("../../deploy/slash.validation")
-const { auditSlashModules } = require("../../deploy/slash.audit")
-const thresholds = require("../../config/thresholds")
-
-const validateOnly = process.env.DEPLOY_VALIDATE_ONLY === "true"
-const basePath = path.join(__dirname, "..", "..", "commands")
->>>>>>> main
 
 const logAuditSummary = ({ commandCount, duplicateCount, invalidCount, payloadSize, ready }) => {
   console.log("[AUDIT] Command count:", commandCount)

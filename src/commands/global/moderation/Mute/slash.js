@@ -30,9 +30,10 @@ module.exports = {
       throw new Error("No guild context")
     }
 
-    const member = interaction.options.getMember("user")
+    const targetUser = interaction.options.getUser("user", true)
     const reason = interaction.options.getString("reason") || "No reason provided"
     const timeInput = interaction.options.getString("time")
+    const member = interaction.options.getMember("user") || guild.members.cache.get(targetUser.id) || await guild.members.fetch(targetUser.id).catch(() => null)
 
     if (!member) {
       return interaction.editReply({
@@ -154,36 +155,36 @@ module.exports = {
       })
     }
 
-    try {
-      await member.timeout(parsed.ms, reason)
-    } catch (err) {
-      throw err
-    }
+    await member.timeout(parsed.ms, reason)
 
     const expiresAt = Math.floor((Date.now() + parsed.ms) / 1000)
 
-    await logModerationAction({
-      guild,
-      action: "mute",
-      userId: member.id,
-      moderatorId: interaction.user.id,
-      reason,
-      duration: parsed.label,
-      expiresAt,
-      color: COLORS.warning
+    setImmediate(() => {
+      logModerationAction({
+        guild,
+        action: "mute",
+        userId: member.id,
+        moderatorId: interaction.user.id,
+        reason,
+        duration: parsed.label,
+        expiresAt,
+        color: COLORS.warning
+      }).catch(() => {})
     })
 
-    await dmUser(
-      guild.id,
-      member.user,
-      dmEmbed({
-        punishment: "mute",
-        expiresAt,
-        reason,
-        guild: guild.name,
-        color: COLORS.warning
-      })
-    )
+    setImmediate(() => {
+      dmUser(
+        guild.id,
+        member.user,
+        dmEmbed({
+          punishment: "mute",
+          expiresAt,
+          reason,
+          guild: guild.name,
+          color: COLORS.warning
+        })
+      ).catch(() => {})
+    })
 
     return interaction.editReply({
       embeds: [
