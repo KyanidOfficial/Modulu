@@ -1,2 +1,3 @@
-const handler = require("../core/handlers/interaction.handler")
-module.exports = (client, interaction) => handler(client, interaction)
+const { handleInteractionCreate } = require("../core/events/interactionCreate")
+
+module.exports = (client, interaction) => handleInteractionCreate(client, interaction)
