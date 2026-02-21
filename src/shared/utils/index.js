@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 const fs = require('fs')
 const path = require('path')
 
@@ -10,6 +9,3 @@ for (const file of fs.readdirSync(__dirname)) {
 }
 
 module.exports = exported
-=======
-module.exports = {}
->>>>>>> main
