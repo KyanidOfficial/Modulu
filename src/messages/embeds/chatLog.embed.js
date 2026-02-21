@@ -1,5 +1,5 @@
 const { EmbedBuilder } = require("discord.js")
-const COLORS = require("../../utils/colors")
+const COLORS = require("../../shared/utils/colors")
 
 module.exports = data => {
   const safeUser = data.user.replace(/_/g, "\\_")

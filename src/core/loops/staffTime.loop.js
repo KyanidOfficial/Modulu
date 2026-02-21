@@ -1,5 +1,5 @@
 const staffDb = require("../database/staffTime")
-const dmUser = require("../../utils/dmUser")
+const dmUser = require("../../shared/utils/dmUser")
 
 const activityEmbed = require("../../messages/embeds/staffTime.activityCheck.embed")
 const autoEmbed = require("../../messages/embeds/staffTime.autoClockout.embed")

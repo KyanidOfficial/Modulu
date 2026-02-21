@@ -1,8 +1,8 @@
 const { PermissionsBitField, EmbedBuilder } = require("discord.js")
-const { extract } = require("../../utils/linkScanner")
-const safeBrowsing = require("../../utils/safeBrowsing")
+const { extract } = require("../../shared/utils/linkScanner")
+const safeBrowsing = require("../../shared/utils/safeBrowsing")
 const harmfulLinksDb = require("../../core/database/harmfulLinks")
-const serverLog = require("../../utils/logServerEvent")
+const serverLog = require("../../shared/utils/logServerEvent")
 
 module.exports = async message => {
   if (!message?.guild) return

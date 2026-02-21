@@ -1,7 +1,11 @@
 const fs = require("fs")
 const path = require("path")
 const registry = require("../registry/slash.commands")
+<<<<<<< HEAD
+const { isCommandEnabled } = require("../../shared/utils/commandToggle")
+=======
 const { isCommandEnabled } = require("../../utils/commandToggle")
+>>>>>>> main
 const { safeExecute } = require("../guards/safeExecute")
 
 const collectSlashFiles = base => {
@@ -20,6 +24,8 @@ const collectSlashFiles = base => {
   walk(base)
   return files
 }
+<<<<<<< HEAD
+=======
 
 const isIgnorableInteractionError = err => err && (err.code === 10062 || err.code === 10008)
 
@@ -50,11 +56,12 @@ const wrapExecute = (commandName, execute) => {
     }
   }
 }
+>>>>>>> main
 
 module.exports = client => {
   console.log("Slash loader started")
 
-  const base = path.join(__dirname, "..", "..", "commands")
+  const base = path.join(__dirname, "..", "..", "commands", "global")
   if (!fs.existsSync(base)) return
 
   for (const slashPath of collectSlashFiles(base)) {

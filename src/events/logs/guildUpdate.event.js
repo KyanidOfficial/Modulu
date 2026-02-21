@@ -1,4 +1,4 @@
-const logServerEvent = require("../../utils/logServerEvent")
+const logServerEvent = require("../../shared/utils/logServerEvent")
 const serverLogEmbed = require("../../messages/embeds/serverLog.embed")
 
 module.exports = (client, oldGuild, newGuild) => {

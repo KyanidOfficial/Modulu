@@ -12,11 +12,11 @@ const rejectEmbed = require("../../messages/embeds/joinGate.rejected.embed")
 const approveEmbed = require("../../messages/embeds/joinGate.approved.embed")
 const feedbackEmbed = require("../../messages/embeds/feedback.embed")
 const systemEmbed = require("../../messages/embeds/system.embed")
-const COLORS = require("../../utils/colors")
+const COLORS = require("../../shared/utils/colors")
 
 const staffTimeButtons = require("./staffTime.buttons")
 const handleApplications = require("../../modules/applications/handlers")
-const { requireEnabled } = require("../../utils/commandToggle")
+const { requireEnabled } = require("../../shared/utils/commandToggle")
 const handleAutomodPanel = require("../../modules/automod/panel.handlers")
 const { getSimService } = require("../sim")
 

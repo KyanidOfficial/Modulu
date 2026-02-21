@@ -5,7 +5,7 @@ const {
 } = require("discord.js")
 
 const systemEmbed = require("../../messages/embeds/system.embed")
-const COLORS = require("../../utils/colors")
+const COLORS = require("../../shared/utils/colors")
 
 module.exports = {
   main() {

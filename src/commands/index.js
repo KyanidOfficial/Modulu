@@ -2,7 +2,11 @@ const fs = require("fs")
 const path = require("path")
 
 const getAllSlashCommandFiles = () => {
+<<<<<<< HEAD
+  const root = path.join(__dirname, "global")
+=======
   const root = path.join(__dirname)
+>>>>>>> main
   const files = []
 
   const walk = dir => {
