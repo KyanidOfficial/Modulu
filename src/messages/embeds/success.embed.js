@@ -1,6 +1,6 @@
 const { EmbedBuilder } = require("discord.js")
-const COLORS = require("../../utils/colors")
-const { EMOJIS } = require("../../utils/constants")
+const COLORS = require("../../shared/utils/colors")
+const { EMOJIS } = require("../../shared/utils/constants")
 
 module.exports = message =>
   new EmbedBuilder()

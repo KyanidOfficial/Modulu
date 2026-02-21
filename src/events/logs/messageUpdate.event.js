@@ -1,4 +1,4 @@
-const logChatEvent = require("../../utils/logChatEvent")
+const logChatEvent = require("../../shared/utils/logChatEvent")
 const chatLogEmbed = require("../../messages/embeds/chatLog.embed")
 
 const cut = v => v?.length > 1000 ? v.slice(0, 1000) + "…" : v

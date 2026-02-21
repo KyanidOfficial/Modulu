@@ -1,6 +1,6 @@
 const { EmbedBuilder } = require("discord.js")
-const COLORS = require("../../utils/colors")
-const { escapeMarkdownSafe } = require("../../utils/safeText")
+const COLORS = require("../../shared/utils/colors")
+const { escapeMarkdownSafe } = require("../../shared/utils/safeText")
 
 const display = value => escapeMarkdownSafe(String(value ?? "N/A"))
 

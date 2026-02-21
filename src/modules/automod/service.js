@@ -1,9 +1,9 @@
 const { PermissionsBitField } = require("discord.js")
-const { extract } = require("../../utils/linkScanner")
+const { extract } = require("../../shared/utils/linkScanner")
 const { normalizeText } = require("./normalizer")
 const store = require("./store")
-const logModerationAction = require("../../utils/logModerationAction")
-const COLORS = require("../../utils/colors")
+const logModerationAction = require("../../shared/utils/logModerationAction")
+const COLORS = require("../../shared/utils/colors")
 
 const COMMAND_PREFIX_FALLBACK = "!"
 const TRACKING_RETENTION_MS = 5 * 60 * 1000

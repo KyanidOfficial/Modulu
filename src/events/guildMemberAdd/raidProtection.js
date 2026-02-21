@@ -1,7 +1,7 @@
 const raidState = require("../../core/raid/raidState")
 const db = require("../../core/database")
 const raidEmbed = require("../../messages/embeds/raid.embed")
-const logServerEvent = require("../../utils/logServerEvent")
+const logServerEvent = require("../../shared/utils/logServerEvent")
 
 module.exports = async member => {
   const guildId = member.guild.id
